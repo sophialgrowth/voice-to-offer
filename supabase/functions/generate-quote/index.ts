@@ -42,10 +42,10 @@ serve(async (req) => {
   }
 
   try {
-    const { audioBase64, priceList, mimeType } = await req.json();
+    const { audioBase64, priceList, mimeType, transcript } = await req.json();
 
-    if (!audioBase64) {
-      throw new Error("No audio data provided");
+    if (!audioBase64 && !transcript) {
+      throw new Error("No audio data or transcript provided");
     }
 
     if (!priceList) {
@@ -57,57 +57,65 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log("Processing audio transcription...");
-    console.log("Audio MIME type:", mimeType);
-    console.log("Audio base64 length:", audioBase64.length);
+    let transcription = "";
 
-    // Step 1: Transcribe audio using Gemini (which supports audio)
-    const binaryAudio = processBase64Chunks(audioBase64);
-    const audioDataUrl = `data:${mimeType || 'audio/webm'};base64,${audioBase64}`;
+    // If transcript is provided directly, use it; otherwise transcribe audio
+    if (transcript) {
+      console.log("Using provided transcript...");
+      transcription = transcript;
+      console.log("Transcript length:", transcription.length);
+    } else if (audioBase64) {
+      console.log("Processing audio transcription...");
+      console.log("Audio MIME type:", mimeType);
+      console.log("Audio base64 length:", audioBase64.length);
 
-    // Use Gemini for transcription since it supports audio natively
-    const transcriptionResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: "你是一个专业的语音转文字助手。请准确地将音频内容转录成文字，保持原意。如果音频中有多人对话，请标注不同的说话者。"
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "请将以下音频内容转录成文字："
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: audioDataUrl
+      // Step 1: Transcribe audio using Gemini (which supports audio)
+      const audioDataUrl = `data:${mimeType || 'audio/webm'};base64,${audioBase64}`;
+
+      // Use Gemini for transcription since it supports audio natively
+      const transcriptionResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "system",
+              content: "你是一个专业的语音转文字助手。请准确地将音频内容转录成文字，保持原意。如果音频中有多人对话，请标注不同的说话者。"
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "请将以下音频内容转录成文字："
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: audioDataUrl
+                  }
                 }
-              }
-            ]
-          }
-        ],
-      }),
-    });
+              ]
+            }
+          ],
+        }),
+      });
 
-    if (!transcriptionResponse.ok) {
-      const errorText = await transcriptionResponse.text();
-      console.error("Transcription API error:", transcriptionResponse.status, errorText);
-      throw new Error(`Transcription API error: ${errorText}`);
+      if (!transcriptionResponse.ok) {
+        const errorText = await transcriptionResponse.text();
+        console.error("Transcription API error:", transcriptionResponse.status, errorText);
+        throw new Error(`Transcription API error: ${errorText}`);
+      }
+
+      const transcriptionData = await transcriptionResponse.json();
+      transcription = transcriptionData.choices?.[0]?.message?.content || "";
+      
+      console.log("Transcription complete:", transcription.substring(0, 200) + "...");
     }
-
-    const transcriptionData = await transcriptionResponse.json();
-    const transcription = transcriptionData.choices?.[0]?.message?.content || "";
-    
-    console.log("Transcription complete:", transcription.substring(0, 200) + "...");
 
     // Step 2: Generate quote based on transcription and price list
     const quotePrompt = `根据客户录音推荐2个服务套餐写成《Wavenote x Nexad: 市场穿透与全球增长护城河构建方案》，尽量用表格形式。分成两部分：一、汇总Customer Context，二、 推荐的解决方案
