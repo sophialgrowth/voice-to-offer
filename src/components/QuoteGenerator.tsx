@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AudioUploader from './AudioUploader';
@@ -8,6 +8,10 @@ import PromptEditor from './PromptEditor';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
+const STORAGE_KEYS = {
+  PROMPT: 'nexad-quote-prompt',
+  PRICE_LIST: 'nexad-quote-price-list',
+};
 const DEFAULT_PRICE_LIST = `以下是nexad managed service价单：
 
 【A. Nexad Growth Credits - 广告投放套餐】
@@ -76,10 +80,31 @@ const QuoteGenerator = () => {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [transcript, setTranscript] = useState('');
   const [inputMode, setInputMode] = useState<'audio' | 'text'>('audio');
-  const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
-  const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
+  const [priceList, setPriceList] = useState(() => {
+    // Load from localStorage on init
+    const saved = localStorage.getItem(STORAGE_KEYS.PRICE_LIST);
+    return saved || DEFAULT_PRICE_LIST;
+  });
+  const [customPrompt, setCustomPrompt] = useState(() => {
+    // Load from localStorage on init
+    const saved = localStorage.getItem(STORAGE_KEYS.PROMPT);
+    return saved || DEFAULT_PROMPT;
+  });
   const [output, setOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Save prompt to localStorage when it changes
+  const handlePromptChange = (newPrompt: string) => {
+    setCustomPrompt(newPrompt);
+    localStorage.setItem(STORAGE_KEYS.PROMPT, newPrompt);
+    toast.success('提示词已保存');
+  };
+
+  // Save price list to localStorage when it changes
+  const handlePriceListChange = (newPriceList: string) => {
+    setPriceList(newPriceList);
+    localStorage.setItem(STORAGE_KEYS.PRICE_LIST, newPriceList);
+  };
 
   const generateQuote = async () => {
     // Validate input based on mode
@@ -192,7 +217,7 @@ const QuoteGenerator = () => {
             </div>
 
             <div className="glass-card p-6">
-              <PriceListInput value={priceList} onChange={setPriceList} />
+              <PriceListInput value={priceList} onChange={handlePriceListChange} />
             </div>
 
             <div className="flex items-center gap-3">
@@ -218,7 +243,7 @@ const QuoteGenerator = () => {
               
               <PromptEditor
                 prompt={customPrompt}
-                onPromptChange={setCustomPrompt}
+                onPromptChange={handlePromptChange}
                 defaultPrompt={DEFAULT_PROMPT}
               />
             </div>
