@@ -25,9 +25,11 @@ interface PromptManagerProps {
   currentPrompt: string;
   onPromptChange: (prompt: string) => void;
   defaultPrompt: string;
+  selectedVersionName: string | null;
+  onVersionNameChange: (name: string | null) => void;
 }
 
-const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptManagerProps) => {
+const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt, selectedVersionName, onVersionNameChange }: PromptManagerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -67,12 +69,13 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
       try {
         const { data, error } = await supabase
           .from('user_prompts')
-          .select('content')
+          .select('content, name')
           .eq('is_default', true)
           .maybeSingle();
 
         if (!error && data) {
           onPromptChange(data.content);
+          onVersionNameChange(data.name);
         }
       } catch (error) {
         console.error('Error loading default prompt:', error);
@@ -112,6 +115,7 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
 
   const handleSelectPrompt = (prompt: Prompt) => {
     onPromptChange(prompt.content);
+    onVersionNameChange(prompt.name);
     setIsOpen(false);
     toast.success(`已切换到「${prompt.name}」`);
   };
@@ -189,6 +193,7 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
 
   const handleResetToDefault = () => {
     onPromptChange(defaultPrompt);
+    onVersionNameChange(null);
     toast.success('已恢复默认提示词');
   };
 

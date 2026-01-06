@@ -25,9 +25,11 @@ interface PriceListManagerProps {
   currentPriceList: string;
   onPriceListChange: (priceList: string) => void;
   defaultPriceList: string;
+  selectedVersionName: string | null;
+  onVersionNameChange: (name: string | null) => void;
 }
 
-const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceList }: PriceListManagerProps) => {
+const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceList, selectedVersionName, onVersionNameChange }: PriceListManagerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -67,12 +69,13 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
       try {
         const { data, error } = await supabase
           .from('price_lists')
-          .select('content')
+          .select('content, name')
           .eq('is_default', true)
           .maybeSingle();
 
         if (!error && data) {
           onPriceListChange(data.content);
+          onVersionNameChange(data.name);
         }
       } catch (error) {
         console.error('Error loading default price list:', error);
@@ -112,6 +115,7 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
 
   const handleSelect = (priceList: PriceList) => {
     onPriceListChange(priceList.content);
+    onVersionNameChange(priceList.name);
     setIsOpen(false);
     toast.success(`已切换到「${priceList.name}」`);
   };
@@ -189,6 +193,7 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
 
   const handleResetToDefault = () => {
     onPriceListChange(defaultPriceList);
+    onVersionNameChange(null);
     toast.success('已恢复默认价目表');
   };
 

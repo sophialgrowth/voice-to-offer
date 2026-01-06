@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, AlertCircle, Zap, MessageSquare } from 'lucide-react';
+import { Sparkles, AlertCircle, Zap, MessageSquare, FileText, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DocumentUploader, { InputMode } from './DocumentUploader';
 import PriceListInput from './PriceListInput';
@@ -91,7 +91,9 @@ const ProposalGenerator = () => {
   const [transcript, setTranscript] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('audio');
   const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
+  const [priceListVersionName, setPriceListVersionName] = useState<string | null>(null);
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
+  const [promptVersionName, setPromptVersionName] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('google/gemini-3-pro-preview');
   const [output, setOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -254,12 +256,26 @@ const ProposalGenerator = () => {
               <div className="glass-card p-6">
                 <div className="flex items-start gap-3">
                   <div className="flex-1">
-                    <PriceListInput value={priceList} onChange={setPriceList} />
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">公司价目表</span>
+                      {priceListVersionName && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                          {priceListVersionName}
+                        </span>
+                      )}
+                    </div>
+                    <PriceListInput value={priceList} onChange={(v) => {
+                      setPriceList(v);
+                      setPriceListVersionName(null); // 手动编辑后清除版本名
+                    }} />
                   </div>
                   <PriceListManager
                     currentPriceList={priceList}
                     onPriceListChange={setPriceList}
                     defaultPriceList={DEFAULT_PRICE_LIST}
+                    selectedVersionName={priceListVersionName}
+                    onVersionNameChange={setPriceListVersionName}
                   />
                 </div>
               </div>
@@ -289,11 +305,22 @@ const ProposalGenerator = () => {
                   )}
                 </Button>
                 
-                <PromptManager
-                  currentPrompt={customPrompt}
-                  onPromptChange={setCustomPrompt}
-                  defaultPrompt={DEFAULT_PROMPT}
-                />
+                <div className="flex items-center gap-2">
+                  <PromptManager
+                    currentPrompt={customPrompt}
+                    onPromptChange={setCustomPrompt}
+                    defaultPrompt={DEFAULT_PROMPT}
+                    selectedVersionName={promptVersionName}
+                    onVersionNameChange={setPromptVersionName}
+                  />
+                  <Settings2 className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">提示词</span>
+                  {promptVersionName && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                      {promptVersionName}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {!hasValidInput() && (
