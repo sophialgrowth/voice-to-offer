@@ -39,13 +39,21 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 const QuoteGenerator = () => {
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [transcript, setTranscript] = useState('');
+  const [inputMode, setInputMode] = useState<'audio' | 'text'>('audio');
   const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
   const [output, setOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const generateQuote = async () => {
-    if (!audioFile) {
+    // Validate input based on mode
+    if (inputMode === 'audio' && !audioFile) {
       toast.error('请先上传客户录音文件');
+      return;
+    }
+    
+    if (inputMode === 'text' && !transcript.trim()) {
+      toast.error('请先输入客户对话文本');
       return;
     }
 
@@ -58,16 +66,26 @@ const QuoteGenerator = () => {
     setOutput('');
 
     try {
-      // Convert audio file to base64
-      const audioBase64 = await fileToBase64(audioFile);
+      let requestBody: {
+        priceList: string;
+        audioBase64?: string;
+        mimeType?: string;
+        transcript?: string;
+      } = { priceList };
+
+      if (inputMode === 'audio' && audioFile) {
+        // Convert audio file to base64
+        const audioBase64 = await fileToBase64(audioFile);
+        requestBody.audioBase64 = audioBase64;
+        requestBody.mimeType = audioFile.type;
+      } else {
+        // Use text transcript directly
+        requestBody.transcript = transcript;
+      }
       
       // Call the edge function
       const { data, error } = await supabase.functions.invoke('generate-quote', {
-        body: {
-          audioBase64,
-          priceList,
-          mimeType: audioFile.type
-        }
+        body: requestBody
       });
 
       if (error) {
@@ -100,6 +118,8 @@ const QuoteGenerator = () => {
     }
   };
 
+  const hasValidInput = inputMode === 'audio' ? !!audioFile : !!transcript.trim();
+
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
@@ -113,7 +133,7 @@ const QuoteGenerator = () => {
             <span className="text-gradient">Wavenote × Nexad</span>
           </h1>
           <p className="text-xl text-muted-foreground mt-4 max-w-2xl mx-auto">
-            上传客户录音，AI 自动分析需求并生成专业报价方案
+            上传客户录音或输入对话文本，AI 自动分析需求并生成专业报价方案
           </p>
         </header>
 
@@ -124,6 +144,10 @@ const QuoteGenerator = () => {
               <AudioUploader
                 selectedFile={audioFile}
                 onFileSelect={setAudioFile}
+                transcript={transcript}
+                onTranscriptChange={setTranscript}
+                inputMode={inputMode}
+                onInputModeChange={setInputMode}
               />
             </div>
 
@@ -151,13 +175,16 @@ const QuoteGenerator = () => {
               )}
             </Button>
 
-            {!audioFile && (
+            {!hasValidInput && (
               <div className="flex items-start gap-3 p-4 rounded-xl bg-secondary/30 border border-border/50">
                 <AlertCircle className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
                 <div className="text-sm text-muted-foreground">
                   <p className="font-medium text-foreground/80">提示</p>
                   <p className="mt-1">
-                    录音文件将由 AI 进行语音识别和内容分析，请确保音质清晰
+                    {inputMode === 'audio' 
+                      ? '录音文件将由 AI 进行语音识别和内容分析，请确保音质清晰'
+                      : '请输入完整的客户对话内容，越详细生成的报价单越准确'
+                    }
                   </p>
                 </div>
               </div>
