@@ -88,11 +88,9 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
     }
 
     try {
-      // We need a placeholder user_id since it's required, but we'll use creator_name for display
       const { error } = await supabase
         .from('user_prompts')
         .insert({
-          user_id: '00000000-0000-0000-0000-000000000000', // Placeholder since we're not using auth
           name: newPromptName.trim(),
           creator_name: creatorName.trim(),
           content: newPromptContent.trim()
