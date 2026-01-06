@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { History, FileText, Mic, File, ThumbsUp, ThumbsDown, Trash2, Calendar } from 'lucide-react';
+import { History, FileText, Mic, File, ThumbsUp, Trash2, Calendar, Search, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -27,6 +28,7 @@ interface ProposalHistoryProps {
 const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHistoryProps) => {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchProposals = async () => {
     setIsLoading(true);
@@ -35,7 +37,7 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
         .from('generated_proposals')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (error) throw error;
       setProposals(data || []);
@@ -49,6 +51,16 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
   useEffect(() => {
     if (isOpen) fetchProposals();
   }, [isOpen]);
+
+  const filteredProposals = proposals.filter(p => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      (p.client_name?.toLowerCase().includes(query)) ||
+      (p.input_summary?.toLowerCase().includes(query)) ||
+      (p.output_markdown?.toLowerCase().includes(query))
+    );
+  });
 
   const handleLike = async (proposalId: string, isLike: boolean) => {
     try {
@@ -95,16 +107,29 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
             生成历史
           </SheetTitle>
         </SheetHeader>
-        <div className="mt-6 space-y-3">
+        
+        <div className="mt-4 mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="搜索客户名、URL..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 bg-secondary/30"
+            />
+          </div>
+        </div>
+        
+        <div className="space-y-3">
           {isLoading ? (
             <div className="text-center py-12 text-muted-foreground">加载中...</div>
-          ) : proposals.length === 0 ? (
+          ) : filteredProposals.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <History className="w-12 h-12 mx-auto mb-4 opacity-30" />
-              <p>还没有生成记录</p>
+              <p>{searchQuery ? '没有找到匹配的记录' : '还没有生成记录'}</p>
             </div>
           ) : (
-            proposals.map((proposal) => (
+            filteredProposals.map((proposal) => (
               <div key={proposal.id} className="glass-card p-4 cursor-pointer hover:border-primary/30 transition-all group" onClick={() => handleSelect(proposal)}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -112,7 +137,13 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
                       <span className="font-medium text-foreground">{proposal.client_name || '未命名客户'}</span>
                       {proposal.is_liked === true && <ThumbsUp className="w-3 h-3 text-primary fill-primary" />}
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">{proposal.output_markdown.slice(0, 150)}...</p>
+                    {proposal.input_summary && (
+                      <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                        <ExternalLink className="w-3 h-3" />
+                        {proposal.input_summary.slice(0, 50)}...
+                      </p>
+                    )}
+                    <p className="text-sm text-muted-foreground line-clamp-2">{proposal.output_markdown.slice(0, 120)}...</p>
                     <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                       <Calendar className="w-3 h-3" />
                       {format(new Date(proposal.created_at), 'MM月dd日 HH:mm', { locale: zhCN })}
