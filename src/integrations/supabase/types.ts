@@ -14,7 +14,122 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      generated_proposals: {
+        Row: {
+          client_name: string | null
+          created_at: string
+          id: string
+          input_summary: string | null
+          input_type: string
+          is_liked: boolean | null
+          output_markdown: string
+          price_list: string
+          prompt_id: string | null
+          user_id: string
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string
+          id?: string
+          input_summary?: string | null
+          input_type: string
+          is_liked?: boolean | null
+          output_markdown: string
+          price_list: string
+          prompt_id?: string | null
+          user_id: string
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string
+          id?: string
+          input_summary?: string | null
+          input_type?: string
+          is_liked?: boolean | null
+          output_markdown?: string
+          price_list?: string
+          prompt_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_proposals_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "user_prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generated_proposals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_prompts: {
+        Row: {
+          content: string
+          created_at: string
+          dislikes: number
+          id: string
+          is_default: boolean
+          likes: number
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          dislikes?: number
+          id?: string
+          is_default?: boolean
+          likes?: number
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          dislikes?: number
+          id?: string
+          is_default?: boolean
+          likes?: number
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_prompts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
