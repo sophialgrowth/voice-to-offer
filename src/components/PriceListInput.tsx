@@ -1,4 +1,4 @@
-import { FileText, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 
 interface PriceListInputProps {
@@ -9,11 +9,6 @@ interface PriceListInputProps {
 const PriceListInput = ({ value, onChange }: PriceListInputProps) => {
   return (
     <div className="space-y-3">
-      <label className="text-sm font-medium text-foreground flex items-center gap-2">
-        <FileText className="w-4 h-4 text-primary" />
-        公司价目表
-      </label>
-      
       <div className="relative">
         <Textarea
           value={value}
