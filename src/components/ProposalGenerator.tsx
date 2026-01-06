@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Sparkles, AlertCircle, Zap } from 'lucide-react';
+import { Sparkles, AlertCircle, Zap, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import DocumentUploader, { InputMode } from './DocumentUploader';
 import PriceListInput from './PriceListInput';
+import PriceListManager from './PriceListManager';
 import MarkdownOutput from './MarkdownOutput';
 import PromptManager from './PromptManager';
 import Header from './Header';
 import ProposalHistory from './ProposalHistory';
+import ConversationChat from './ConversationChat';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useUser } from '@/hooks/useUser';
 
 const DEFAULT_PRICE_LIST = `以下是nexad managed service价单：
 
@@ -85,7 +86,6 @@ const readTextFile = (file: File): Promise<string> => {
 };
 
 const ProposalGenerator = () => {
-  const { user } = useUser();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [transcript, setTranscript] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('audio');
@@ -94,6 +94,7 @@ const ProposalGenerator = () => {
   const [output, setOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const generateProposal = async () => {
     // Validate input based on mode
@@ -164,19 +165,17 @@ const ProposalGenerator = () => {
       setOutput(data.quote);
       toast.success('方案生成成功！');
 
-      // Save to history
-      if (user) {
-        try {
-          await supabase.from('generated_proposals').insert({
-            user_id: user.id,
-            input_type: inputMode,
-            input_summary: inputMode === 'text' ? transcript.slice(0, 200) : selectedFile?.name,
-            price_list: priceList,
-            output_markdown: data.quote
-          });
-        } catch (saveError) {
-          console.error('Error saving to history:', saveError);
-        }
+      // Save to history (without user_id since login is removed)
+      try {
+        await supabase.from('generated_proposals').insert({
+          user_id: null,
+          input_type: inputMode,
+          input_summary: inputMode === 'text' ? transcript.slice(0, 200) : selectedFile?.name,
+          price_list: priceList,
+          output_markdown: data.quote
+        });
+      } catch (saveError) {
+        console.error('Error saving to history:', saveError);
       }
     } catch (error) {
       console.error('Error generating proposal:', error);
@@ -222,7 +221,7 @@ const ProposalGenerator = () => {
           <header className="text-center mb-10 animate-slide-up">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
               <Zap className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-primary">AI 智能生成</span>
+              <span className="text-sm font-medium text-primary">Gemini 3.0 Pro 驱动</span>
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-display tracking-tight mb-4">
               为客户打造<span className="text-gradient">专属增长方案</span>
@@ -247,7 +246,16 @@ const ProposalGenerator = () => {
               </div>
 
               <div className="glass-card p-6">
-                <PriceListInput value={priceList} onChange={setPriceList} />
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <PriceListInput value={priceList} onChange={setPriceList} />
+                  </div>
+                  <PriceListManager
+                    currentPriceList={priceList}
+                    onPriceListChange={setPriceList}
+                    defaultPriceList={DEFAULT_PRICE_LIST}
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-3">
@@ -297,8 +305,21 @@ const ProposalGenerator = () => {
             </div>
 
             {/* Output Section */}
-            <div className="animate-slide-up delay-200">
+            <div className="animate-slide-up delay-200 relative">
               <MarkdownOutput content={output} isLoading={isLoading} />
+              
+              {/* Chat button - only show when output exists */}
+              {output && !isLoading && (
+                <Button
+                  variant="glow"
+                  size="lg"
+                  className="fixed bottom-6 right-6 z-40 shadow-lg"
+                  onClick={() => setChatOpen(!chatOpen)}
+                >
+                  <MessageSquare className="w-5 h-5 mr-2" />
+                  对话修改
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -309,6 +330,15 @@ const ProposalGenerator = () => {
         isOpen={historyOpen}
         onOpenChange={setHistoryOpen}
         onSelectProposal={handleHistorySelect}
+      />
+
+      {/* Conversation Chat */}
+      <ConversationChat
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        currentOutput={output}
+        onOutputUpdate={setOutput}
+        priceList={priceList}
       />
     </div>
   );

@@ -17,6 +17,7 @@ export type Database = {
       generated_proposals: {
         Row: {
           client_name: string | null
+          conversation_history: Json | null
           created_at: string
           id: string
           input_summary: string | null
@@ -25,10 +26,11 @@ export type Database = {
           output_markdown: string
           price_list: string
           prompt_id: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           client_name?: string | null
+          conversation_history?: Json | null
           created_at?: string
           id?: string
           input_summary?: string | null
@@ -37,10 +39,11 @@ export type Database = {
           output_markdown: string
           price_list: string
           prompt_id?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           client_name?: string | null
+          conversation_history?: Json | null
           created_at?: string
           id?: string
           input_summary?: string | null
@@ -49,7 +52,7 @@ export type Database = {
           output_markdown?: string
           price_list?: string
           prompt_id?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -68,10 +71,47 @@ export type Database = {
           },
         ]
       }
+      price_lists: {
+        Row: {
+          content: string
+          created_at: string
+          creator_name: string
+          dislikes: number
+          id: string
+          is_default: boolean
+          likes: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          creator_name: string
+          dislikes?: number
+          id?: string
+          is_default?: boolean
+          likes?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          creator_name?: string
+          dislikes?: number
+          id?: string
+          is_default?: boolean
+          likes?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_prompts: {
         Row: {
           content: string
           created_at: string
+          creator_name: string | null
           dislikes: number
           id: string
           is_default: boolean
@@ -83,6 +123,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          creator_name?: string | null
           dislikes?: number
           id?: string
           is_default?: boolean
@@ -94,6 +135,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          creator_name?: string | null
           dislikes?: number
           id?: string
           is_default?: boolean
