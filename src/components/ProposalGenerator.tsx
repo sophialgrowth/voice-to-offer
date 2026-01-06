@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, AlertCircle, Zap, MessageSquare, FileText, Settings2, Copy } from 'lucide-react';
+import { Sparkles, AlertCircle, Zap, MessageSquare, FileText, Settings2, Copy, FileCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import ProposalHistory from './ProposalHistory';
 import ConversationChat from './ConversationChat';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 const DEFAULT_PRICE_LIST = `以下是nexad managed service价单：
 
@@ -105,6 +106,7 @@ const ProposalGenerator = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [generateTwo, setGenerateTwo] = useState(false);
+  const [useMarkdown, setUseMarkdown] = useState(true);
 
   // Load default versions on mount
   useEffect(() => {
@@ -176,6 +178,7 @@ const ProposalGenerator = () => {
         generateCount: number;
         clientBrand: string;
         productUrl: string;
+        useMarkdown: boolean;
         audioBase64?: string;
         mimeType?: string;
         transcript?: string;
@@ -187,7 +190,8 @@ const ProposalGenerator = () => {
         model: selectedModel,
         generateCount: generateTwo ? 2 : 1,
         clientBrand,
-        productUrl
+        productUrl,
+        useMarkdown
       };
 
       if (inputMode === 'audio' && selectedFile) {
@@ -356,6 +360,40 @@ const ProposalGenerator = () => {
               <div className="glass-card p-6 space-y-4">
                 <ModelSelector value={selectedModel} onChange={setSelectedModel} />
                 
+                {/* Markdown Toggle - 明显的开关 */}
+                <div className={cn(
+                  "flex items-center justify-between p-3 rounded-xl border-2 transition-colors",
+                  useMarkdown 
+                    ? "border-primary/50 bg-primary/10" 
+                    : "border-border/50 bg-secondary/30"
+                )}>
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-lg flex items-center justify-center",
+                      useMarkdown ? "bg-primary/20" : "bg-secondary"
+                    )}>
+                      <FileCode className={cn(
+                        "w-5 h-5",
+                        useMarkdown ? "text-primary" : "text-muted-foreground"
+                      )} />
+                    </div>
+                    <div>
+                      <Label htmlFor="use-markdown" className="text-sm font-semibold cursor-pointer">
+                        Markdown 格式输出
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {useMarkdown ? "使用表格、标题等富文本格式" : "纯文本格式，方便直接复制"}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="use-markdown"
+                    checked={useMarkdown}
+                    onCheckedChange={setUseMarkdown}
+                    className="data-[state=checked]:bg-primary"
+                  />
+                </div>
+
                 <div className="flex items-center justify-between pt-2 border-t border-border/50">
                   <div className="flex items-center gap-2">
                     <Copy className="w-4 h-4 text-primary" />
