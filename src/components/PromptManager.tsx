@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
   Settings2, Plus, Star, ThumbsUp, ThumbsDown, Trash2, 
-  Check, Sparkles, RotateCcw
+  Check, Sparkles, RotateCcw, Crown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +42,7 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
       const { data, error } = await supabase
         .from('user_prompts')
         .select('*')
+        .order('is_default', { ascending: false })
         .order('likes', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -59,6 +60,26 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
       fetchPrompts();
     }
   }, [isOpen]);
+
+  // Load default prompt on mount
+  useEffect(() => {
+    const loadDefaultPrompt = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_prompts')
+          .select('content')
+          .eq('is_default', true)
+          .single();
+
+        if (!error && data) {
+          onPromptChange(data.content);
+        }
+      } catch (error) {
+        console.error('Error loading default prompt:', error);
+      }
+    };
+    loadDefaultPrompt();
+  }, []);
 
   const handleSaveNewPrompt = async () => {
     if (!newPromptName.trim() || !newPromptContent.trim() || !creatorName.trim()) {
@@ -95,6 +116,30 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
     onPromptChange(prompt.content);
     setIsOpen(false);
     toast.success(`已切换到「${prompt.name}」`);
+  };
+
+  const handleSetDefault = async (id: string) => {
+    try {
+      // First, remove default from all prompts
+      await supabase
+        .from('user_prompts')
+        .update({ is_default: false })
+        .neq('id', '');
+
+      // Then set the selected one as default
+      const { error } = await supabase
+        .from('user_prompts')
+        .update({ is_default: true })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('已设为默认提示词');
+      fetchPrompts();
+    } catch (error) {
+      console.error('Error setting default:', error);
+      toast.error('设置失败');
+    }
   };
 
   const handleUpdateLikes = async (promptId: string, isLike: boolean) => {
@@ -266,7 +311,8 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
                     key={prompt.id}
                     className={cn(
                       'glass-card p-4 cursor-pointer hover:border-primary/30 transition-colors',
-                      'group'
+                      'group',
+                      prompt.is_default && 'border-primary/50 bg-primary/5'
                     )}
                     onClick={() => handleSelectPrompt(prompt)}
                   >
@@ -274,6 +320,12 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-foreground">{prompt.name}</span>
+                          {prompt.is_default && (
+                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                              <Crown className="w-3 h-3" />
+                              默认
+                            </span>
+                          )}
                           {prompt.creator_name && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
                               {prompt.creator_name}
@@ -292,6 +344,17 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        {!prompt.is_default && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleSetDefault(prompt.id)}
+                            title="设为默认"
+                          >
+                            <Crown className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
