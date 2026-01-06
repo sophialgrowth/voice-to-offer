@@ -69,7 +69,7 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
           .from('user_prompts')
           .select('content')
           .eq('is_default', true)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
           onPromptChange(data.content);
@@ -121,10 +121,12 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
   const handleSetDefault = async (id: string) => {
     try {
       // First, remove default from all prompts
-      await supabase
+      const { error: resetError } = await supabase
         .from('user_prompts')
         .update({ is_default: false })
-        .neq('id', '');
+        .eq('is_default', true);
+
+      if (resetError) throw resetError;
 
       // Then set the selected one as default
       const { error } = await supabase

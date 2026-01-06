@@ -69,7 +69,7 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
           .from('price_lists')
           .select('content')
           .eq('is_default', true)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
           onPriceListChange(data.content);
@@ -119,10 +119,12 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
   const handleSetDefault = async (id: string) => {
     try {
       // First, remove default from all price lists
-      await supabase
+      const { error: resetError } = await supabase
         .from('price_lists')
         .update({ is_default: false })
-        .neq('id', '');
+        .eq('is_default', true);
+
+      if (resetError) throw resetError;
 
       // Then set the selected one as default
       const { error } = await supabase
