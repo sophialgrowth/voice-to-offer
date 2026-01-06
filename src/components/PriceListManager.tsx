@@ -6,12 +6,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
-  Settings2, Plus, Star, ThumbsUp, ThumbsDown, Trash2, 
-  Check, Sparkles, RotateCcw
+  FileText, Plus, Star, ThumbsUp, ThumbsDown, Trash2, 
+  Check, RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface Prompt {
+interface PriceList {
   id: string;
   creator_name: string;
   name: string;
@@ -21,34 +21,34 @@ interface Prompt {
   is_default: boolean;
 }
 
-interface PromptManagerProps {
-  currentPrompt: string;
-  onPromptChange: (prompt: string) => void;
-  defaultPrompt: string;
+interface PriceListManagerProps {
+  currentPriceList: string;
+  onPriceListChange: (priceList: string) => void;
+  defaultPriceList: string;
 }
 
-const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptManagerProps) => {
+const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceList }: PriceListManagerProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [newPromptName, setNewPromptName] = useState('');
+  const [newName, setNewName] = useState('');
   const [creatorName, setCreatorName] = useState('');
-  const [newPromptContent, setNewPromptContent] = useState('');
+  const [newContent, setNewContent] = useState('');
   const [showNewForm, setShowNewForm] = useState(false);
 
-  const fetchPrompts = async () => {
+  const fetchPriceLists = async () => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
-        .from('user_prompts')
+        .from('price_lists')
         .select('*')
         .order('likes', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setPrompts(data || []);
+      setPriceLists(data || []);
     } catch (error) {
-      console.error('Error fetching prompts:', error);
+      console.error('Error fetching price lists:', error);
     } finally {
       setIsLoading(false);
     }
@@ -56,117 +56,115 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
 
   useEffect(() => {
     if (isOpen) {
-      fetchPrompts();
+      fetchPriceLists();
     }
   }, [isOpen]);
 
-  const handleSaveNewPrompt = async () => {
-    if (!newPromptName.trim() || !newPromptContent.trim() || !creatorName.trim()) {
+  const handleSaveNew = async () => {
+    if (!newName.trim() || !newContent.trim() || !creatorName.trim()) {
       toast.error('请填写名称、创建者和内容');
       return;
     }
 
     try {
-      // We need a placeholder user_id since it's required, but we'll use creator_name for display
       const { error } = await supabase
-        .from('user_prompts')
+        .from('price_lists')
         .insert({
-          user_id: '00000000-0000-0000-0000-000000000000', // Placeholder since we're not using auth
-          name: newPromptName.trim(),
+          name: newName.trim(),
           creator_name: creatorName.trim(),
-          content: newPromptContent.trim()
+          content: newContent.trim()
         });
 
       if (error) throw error;
 
-      toast.success('提示词已保存');
-      setNewPromptName('');
+      toast.success('价目表已保存');
+      setNewName('');
       setCreatorName('');
-      setNewPromptContent('');
+      setNewContent('');
       setShowNewForm(false);
-      fetchPrompts();
+      fetchPriceLists();
     } catch (error) {
-      console.error('Error saving prompt:', error);
+      console.error('Error saving price list:', error);
       toast.error('保存失败');
     }
   };
 
-  const handleSelectPrompt = (prompt: Prompt) => {
-    onPromptChange(prompt.content);
+  const handleSelect = (priceList: PriceList) => {
+    onPriceListChange(priceList.content);
     setIsOpen(false);
-    toast.success(`已切换到「${prompt.name}」`);
+    toast.success(`已切换到「${priceList.name}」`);
   };
 
-  const handleUpdateLikes = async (promptId: string, isLike: boolean) => {
+  const handleUpdateLikes = async (id: string, isLike: boolean) => {
     try {
-      const prompt = prompts.find(p => p.id === promptId);
-      if (!prompt) return;
+      const item = priceLists.find(p => p.id === id);
+      if (!item) return;
 
       const updateField = isLike ? 'likes' : 'dislikes';
-      const newValue = isLike ? prompt.likes + 1 : prompt.dislikes + 1;
+      const newValue = isLike ? item.likes + 1 : item.dislikes + 1;
 
       const { error } = await supabase
-        .from('user_prompts')
+        .from('price_lists')
         .update({ [updateField]: newValue })
-        .eq('id', promptId);
+        .eq('id', id);
 
       if (error) throw error;
       
-      setPrompts(prompts.map(p => 
-        p.id === promptId ? { ...p, [updateField]: newValue } : p
+      setPriceLists(priceLists.map(p => 
+        p.id === id ? { ...p, [updateField]: newValue } : p
       ));
     } catch (error) {
       console.error('Error updating likes:', error);
     }
   };
 
-  const handleDeletePrompt = async (promptId: string) => {
+  const handleDelete = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('user_prompts')
+        .from('price_lists')
         .delete()
-        .eq('id', promptId);
+        .eq('id', id);
 
       if (error) throw error;
       
       toast.success('已删除');
-      fetchPrompts();
+      fetchPriceLists();
     } catch (error) {
-      console.error('Error deleting prompt:', error);
+      console.error('Error deleting price list:', error);
       toast.error('删除失败');
     }
   };
 
   const handleSaveCurrentAsNew = () => {
-    setNewPromptContent(currentPrompt);
+    setNewContent(currentPriceList);
     setShowNewForm(true);
   };
 
   const handleResetToDefault = () => {
-    onPromptChange(defaultPrompt);
-    toast.success('已恢复默认提示词');
+    onPriceListChange(defaultPriceList);
+    toast.success('已恢复默认价目表');
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="icon" className="shrink-0">
-          <Settings2 className="w-4 h-4" />
+          <FileText className="w-4 h-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            提示词管理
+            <FileText className="w-5 h-5 text-primary" />
+            价目表版本管理
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-          {/* Current Prompt Preview */}
+          {/* Current Price List Preview */}
           <div className="glass-card p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">当前使用的提示词</span>
+              <span className="text-sm font-medium text-muted-foreground">当前使用的价目表</span>
               <div className="flex gap-2">
                 <Button
                   variant="ghost"
@@ -184,30 +182,30 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
                   className="text-xs"
                 >
                   <Plus className="w-3 h-3 mr-1" />
-                  保存为快捷方式
+                  保存为版本
                 </Button>
               </div>
             </div>
             <Textarea
-              value={currentPrompt}
-              onChange={(e) => onPromptChange(e.target.value)}
+              value={currentPriceList}
+              onChange={(e) => onPriceListChange(e.target.value)}
               className="min-h-[100px] text-sm bg-secondary/30"
             />
           </div>
 
-          {/* New Prompt Form */}
+          {/* New Price List Form */}
           {showNewForm && (
             <div className="glass-card p-4 space-y-3 animate-slide-down">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">新建快捷方式</span>
+                <span className="text-sm font-medium">新建价目表版本</span>
                 <Button variant="ghost" size="sm" onClick={() => setShowNewForm(false)}>
                   取消
                 </Button>
               </div>
               <Input
-                placeholder="快捷方式名称（如：简洁版、详细版）"
-                value={newPromptName}
-                onChange={(e) => setNewPromptName(e.target.value)}
+                placeholder="版本名称（如：2024Q4版、折扣版）"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
                 className="bg-secondary/30"
               />
               <Input
@@ -217,31 +215,31 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
                 className="bg-secondary/30"
               />
               <Textarea
-                placeholder="提示词内容"
-                value={newPromptContent}
-                onChange={(e) => setNewPromptContent(e.target.value)}
+                placeholder="价目表内容"
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
                 className="min-h-[80px] text-sm bg-secondary/30"
               />
-              <Button onClick={handleSaveNewPrompt} className="w-full" variant="glow">
+              <Button onClick={handleSaveNew} className="w-full" variant="glow">
                 <Check className="w-4 h-4 mr-2" />
                 保存
               </Button>
             </div>
           )}
 
-          {/* Saved Prompts List */}
+          {/* Saved Price Lists */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">
-                所有快捷方式 {prompts.length > 0 && `(${prompts.length})`}
+                已保存的版本 {priceLists.length > 0 && `(${priceLists.length})`}
               </span>
               {!showNewForm && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    setNewPromptContent('');
-                    setNewPromptName('');
+                    setNewContent('');
+                    setNewName('');
                     setCreatorName('');
                     setShowNewForm(true);
                   }}
@@ -254,40 +252,38 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
 
             {isLoading ? (
               <div className="text-center py-8 text-muted-foreground">加载中...</div>
-            ) : prompts.length === 0 ? (
+            ) : priceLists.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <p>还没有保存的快捷方式</p>
-                <p className="text-sm mt-1">点击「保存为快捷方式」来创建</p>
+                <p>还没有保存的价目表版本</p>
+                <p className="text-sm mt-1">点击「保存为版本」来创建</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {prompts.map((prompt) => (
+                {priceLists.map((item) => (
                   <div
-                    key={prompt.id}
+                    key={item.id}
                     className={cn(
                       'glass-card p-4 cursor-pointer hover:border-primary/30 transition-colors',
                       'group'
                     )}
-                    onClick={() => handleSelectPrompt(prompt)}
+                    onClick={() => handleSelect(item)}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-foreground">{prompt.name}</span>
-                          {prompt.creator_name && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
-                              {prompt.creator_name}
-                            </span>
-                          )}
-                          {prompt.likes > 0 && (
+                          <span className="font-medium text-foreground">{item.name}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                            {item.creator_name}
+                          </span>
+                          {item.likes > 0 && (
                             <span className="inline-flex items-center gap-1 text-xs text-primary">
                               <Star className="w-3 h-3 fill-current" />
-                              {prompt.likes}
+                              {item.likes}
                             </span>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-2">
-                          {prompt.content}
+                          {item.content}
                         </p>
                       </div>
                       
@@ -296,7 +292,7 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => handleUpdateLikes(prompt.id, true)}
+                          onClick={() => handleUpdateLikes(item.id, true)}
                         >
                           <ThumbsUp className="w-4 h-4 text-muted-foreground hover:text-primary" />
                         </Button>
@@ -304,7 +300,7 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => handleUpdateLikes(prompt.id, false)}
+                          onClick={() => handleUpdateLikes(item.id, false)}
                         >
                           <ThumbsDown className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                         </Button>
@@ -312,7 +308,7 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => handleDeletePrompt(prompt.id)}
+                          onClick={() => handleDelete(item.id)}
                         >
                           <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                         </Button>
@@ -329,4 +325,4 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptM
   );
 };
 
-export default PromptManager;
+export default PriceListManager;

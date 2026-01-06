@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { useUser } from '@/hooks/useUser';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { 
-  History, FileText, Mic, File, ThumbsUp, ThumbsDown,
-  Trash2, Eye, Clock, Calendar
-} from 'lucide-react';
+import { History, FileText, Mic, File, ThumbsUp, ThumbsDown, Trash2, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -29,19 +25,15 @@ interface ProposalHistoryProps {
 }
 
 const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHistoryProps) => {
-  const { user } = useUser();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchProposals = async () => {
-    if (!user) return;
-    
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('generated_proposals')
         .select('*')
-        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -55,23 +47,14 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
   };
 
   useEffect(() => {
-    if (isOpen && user) {
-      fetchProposals();
-    }
-  }, [isOpen, user]);
+    if (isOpen) fetchProposals();
+  }, [isOpen]);
 
   const handleLike = async (proposalId: string, isLike: boolean) => {
     try {
-      const { error } = await supabase
-        .from('generated_proposals')
-        .update({ is_liked: isLike })
-        .eq('id', proposalId);
-
+      const { error } = await supabase.from('generated_proposals').update({ is_liked: isLike }).eq('id', proposalId);
       if (error) throw error;
-      
-      setProposals(proposals.map(p => 
-        p.id === proposalId ? { ...p, is_liked: isLike } : p
-      ));
+      setProposals(proposals.map(p => p.id === proposalId ? { ...p, is_liked: isLike } : p));
     } catch (error) {
       console.error('Error updating like:', error);
     }
@@ -79,13 +62,8 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
 
   const handleDelete = async (proposalId: string) => {
     try {
-      const { error } = await supabase
-        .from('generated_proposals')
-        .delete()
-        .eq('id', proposalId);
-
+      const { error } = await supabase.from('generated_proposals').delete().eq('id', proposalId);
       if (error) throw error;
-      
       toast.success('已删除');
       setProposals(proposals.filter(p => p.id !== proposalId));
     } catch (error) {
@@ -108,14 +86,6 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
     }
   };
 
-  const getInputLabel = (type: string) => {
-    switch (type) {
-      case 'audio': return '音频录音';
-      case 'document': return '文档上传';
-      default: return '文本输入';
-    }
-  };
-
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -125,7 +95,6 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
             生成历史
           </SheetTitle>
         </SheetHeader>
-
         <div className="mt-6 space-y-3">
           {isLoading ? (
             <div className="text-center py-12 text-muted-foreground">加载中...</div>
@@ -133,77 +102,27 @@ const ProposalHistory = ({ isOpen, onOpenChange, onSelectProposal }: ProposalHis
             <div className="text-center py-12 text-muted-foreground">
               <History className="w-12 h-12 mx-auto mb-4 opacity-30" />
               <p>还没有生成记录</p>
-              <p className="text-sm mt-1">生成的方案会自动保存到这里</p>
             </div>
           ) : (
             proposals.map((proposal) => (
-              <div
-                key={proposal.id}
-                className="glass-card p-4 cursor-pointer hover:border-primary/30 transition-all group"
-                onClick={() => handleSelect(proposal)}
-              >
+              <div key={proposal.id} className="glass-card p-4 cursor-pointer hover:border-primary/30 transition-all group" onClick={() => handleSelect(proposal)}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    {/* Client name or date */}
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="font-medium text-foreground">
-                        {proposal.client_name || '未命名客户'}
-                      </span>
-                      {proposal.is_liked === true && (
-                        <ThumbsUp className="w-3 h-3 text-primary fill-primary" />
-                      )}
+                      <span className="font-medium text-foreground">{proposal.client_name || '未命名客户'}</span>
+                      {proposal.is_liked === true && <ThumbsUp className="w-3 h-3 text-primary fill-primary" />}
                     </div>
-
-                    {/* Input type badge */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/50 text-xs text-muted-foreground">
-                        {getInputIcon(proposal.input_type)}
-                        {getInputLabel(proposal.input_type)}
-                      </span>
-                    </div>
-
-                    {/* Preview */}
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {proposal.output_markdown.slice(0, 150)}...
-                    </p>
-
-                    {/* Date */}
+                    <p className="text-sm text-muted-foreground line-clamp-2">{proposal.output_markdown.slice(0, 150)}...</p>
                     <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                       <Calendar className="w-3 h-3" />
                       {format(new Date(proposal.created_at), 'MM月dd日 HH:mm', { locale: zhCN })}
                     </div>
                   </div>
-
-                  {/* Actions */}
                   <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleLike(proposal.id, true)}
-                    >
-                      <ThumbsUp className={cn(
-                        "w-4 h-4",
-                        proposal.is_liked === true ? "text-primary fill-primary" : "text-muted-foreground"
-                      )} />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleLike(proposal.id, true)}>
+                      <ThumbsUp className={cn("w-4 h-4", proposal.is_liked === true ? "text-primary fill-primary" : "text-muted-foreground")} />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleLike(proposal.id, false)}
-                    >
-                      <ThumbsDown className={cn(
-                        "w-4 h-4",
-                        proposal.is_liked === false ? "text-destructive fill-destructive" : "text-muted-foreground"
-                      )} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleDelete(proposal.id)}
-                    >
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(proposal.id)}>
                       <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                     </Button>
                   </div>
