@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
   FileText, Plus, Star, ThumbsUp, ThumbsDown, Trash2, 
-  Check, RotateCcw
+  Check, RotateCcw, Crown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +42,7 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
       const { data, error } = await supabase
         .from('price_lists')
         .select('*')
+        .order('is_default', { ascending: false })
         .order('likes', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -59,6 +60,26 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
       fetchPriceLists();
     }
   }, [isOpen]);
+
+  // Load default price list on mount
+  useEffect(() => {
+    const loadDefaultPriceList = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('price_lists')
+          .select('content')
+          .eq('is_default', true)
+          .single();
+
+        if (!error && data) {
+          onPriceListChange(data.content);
+        }
+      } catch (error) {
+        console.error('Error loading default price list:', error);
+      }
+    };
+    loadDefaultPriceList();
+  }, []);
 
   const handleSaveNew = async () => {
     if (!newName.trim() || !newContent.trim() || !creatorName.trim()) {
@@ -93,6 +114,30 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
     onPriceListChange(priceList.content);
     setIsOpen(false);
     toast.success(`已切换到「${priceList.name}」`);
+  };
+
+  const handleSetDefault = async (id: string) => {
+    try {
+      // First, remove default from all price lists
+      await supabase
+        .from('price_lists')
+        .update({ is_default: false })
+        .neq('id', '');
+
+      // Then set the selected one as default
+      const { error } = await supabase
+        .from('price_lists')
+        .update({ is_default: true })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('已设为默认价目表');
+      fetchPriceLists();
+    } catch (error) {
+      console.error('Error setting default:', error);
+      toast.error('设置失败');
+    }
   };
 
   const handleUpdateLikes = async (id: string, isLike: boolean) => {
@@ -264,7 +309,8 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
                     key={item.id}
                     className={cn(
                       'glass-card p-4 cursor-pointer hover:border-primary/30 transition-colors',
-                      'group'
+                      'group',
+                      item.is_default && 'border-primary/50 bg-primary/5'
                     )}
                     onClick={() => handleSelect(item)}
                   >
@@ -272,6 +318,12 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-foreground">{item.name}</span>
+                          {item.is_default && (
+                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                              <Crown className="w-3 h-3" />
+                              默认
+                            </span>
+                          )}
                           <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
                             {item.creator_name}
                           </span>
@@ -288,6 +340,17 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        {!item.is_default && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleSetDefault(item.id)}
+                            title="设为默认"
+                          >
+                            <Crown className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
