@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType, model, generateCount = 1, clientBrand, productUrl } = await req.json();
+    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType, model, generateCount = 1, clientBrand, productUrl, useMarkdown = true } = await req.json();
 
     console.log("Request received, generateCount:", generateCount);
 
@@ -155,6 +155,11 @@ serve(async (req) => {
         ? `\n\n【客户信息】\n- 客户品牌/公司名：${clientBrand || '未提供'}\n- 产品页面URL：${productUrl || '未提供'}`
         : '';
 
+      // Format instruction based on useMarkdown setting
+      const formatInstruction = useMarkdown 
+        ? "使用Markdown格式输出，包括表格、标题、列表等富文本格式。"
+        : "使用纯文本格式输出，不使用Markdown语法（如#、**、|表格等），保持简洁易读的纯文本格式，方便直接复制粘贴。";
+
       const quotePrompt = `${basePrompt}${variationHint}
 ${clientInfo}
 
@@ -164,11 +169,13 @@ ${transcription}
 以下是公司价目表：
 ${priceList}
 
-请根据以上信息生成专业的增长方案，使用Markdown格式输出。确保：
+请根据以上信息生成专业的增长方案。${formatInstruction}
+
+确保：
 1. 使用客户品牌名「${clientBrand || 'XXX'}」替换方案标题中的XXX
 2. 准确理解客户的需求和业务背景
 3. 根据客户情况推荐最合适的套餐组合
-4. 使用表格清晰展示信息
+${useMarkdown ? '4. 使用表格清晰展示信息' : '4. 使用清晰的层级结构展示信息'}
 5. 包含投入产出预估
 6. 语言专业且有说服力`;
 
