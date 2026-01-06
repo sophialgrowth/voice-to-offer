@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { Sparkles, AlertCircle, Zap, MessageSquare, FileText, Settings2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, AlertCircle, Zap, MessageSquare, FileText, Settings2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import DocumentUploader, { InputMode } from './DocumentUploader';
 import PriceListInput from './PriceListInput';
 import PriceListManager from './PriceListManager';
@@ -96,9 +98,41 @@ const ProposalGenerator = () => {
   const [promptVersionName, setPromptVersionName] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState('google/gemini-3-pro-preview');
   const [output, setOutput] = useState('');
+  const [output2, setOutput2] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [generateTwo, setGenerateTwo] = useState(false);
+
+  // Load default versions on mount
+  useEffect(() => {
+    const loadDefaults = async () => {
+      // Load default price list
+      const { data: priceData } = await supabase
+        .from('price_lists')
+        .select('content, name')
+        .eq('is_default', true)
+        .maybeSingle();
+
+      if (priceData) {
+        setPriceList(priceData.content);
+        setPriceListVersionName(priceData.name);
+      }
+
+      // Load default prompt
+      const { data: promptData } = await supabase
+        .from('user_prompts')
+        .select('content, name')
+        .eq('is_default', true)
+        .maybeSingle();
+
+      if (promptData) {
+        setCustomPrompt(promptData.content);
+        setPromptVersionName(promptData.name);
+      }
+    };
+    loadDefaults();
+  }, []);
 
   const generateProposal = async () => {
     // Validate input based on mode
@@ -119,12 +153,14 @@ const ProposalGenerator = () => {
 
     setIsLoading(true);
     setOutput('');
+    setOutput2('');
 
     try {
       let requestBody: {
         priceList: string;
         customPrompt: string;
         model: string;
+        generateCount: number;
         audioBase64?: string;
         mimeType?: string;
         transcript?: string;
@@ -133,7 +169,8 @@ const ProposalGenerator = () => {
       } = { 
         priceList,
         customPrompt,
-        model: selectedModel
+        model: selectedModel,
+        generateCount: generateTwo ? 2 : 1
       };
 
       if (inputMode === 'audio' && selectedFile) {
@@ -169,7 +206,10 @@ const ProposalGenerator = () => {
       }
 
       setOutput(data.quote);
-      toast.success('方案生成成功！');
+      if (data.quote2) {
+        setOutput2(data.quote2);
+      }
+      toast.success(generateTwo ? '2个方案生成成功！' : '方案生成成功！');
 
       // Save to history (without user_id since login is removed)
       try {
@@ -180,6 +220,15 @@ const ProposalGenerator = () => {
           price_list: priceList,
           output_markdown: data.quote
         });
+        if (data.quote2) {
+          await supabase.from('generated_proposals').insert({
+            user_id: null,
+            input_type: inputMode,
+            input_summary: inputMode === 'text' ? transcript.slice(0, 200) : selectedFile?.name,
+            price_list: priceList,
+            output_markdown: data.quote2
+          });
+        }
       } catch (saveError) {
         console.error('Error saving to history:', saveError);
       }
@@ -280,8 +329,22 @@ const ProposalGenerator = () => {
                 </div>
               </div>
 
-              <div className="glass-card p-6">
+              <div className="glass-card p-6 space-y-4">
                 <ModelSelector value={selectedModel} onChange={setSelectedModel} />
+                
+                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                  <div className="flex items-center gap-2">
+                    <Copy className="w-4 h-4 text-primary" />
+                    <Label htmlFor="generate-two" className="text-sm font-medium cursor-pointer">
+                      生成2个方案比稿
+                    </Label>
+                  </div>
+                  <Switch
+                    id="generate-two"
+                    checked={generateTwo}
+                    onCheckedChange={setGenerateTwo}
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-3">
@@ -342,8 +405,29 @@ const ProposalGenerator = () => {
             </div>
 
             {/* Output Section */}
-            <div className="animate-slide-up delay-200 relative">
-              <MarkdownOutput content={output} isLoading={isLoading} />
+            <div className="animate-slide-up delay-200 relative space-y-6">
+              {generateTwo && output && output2 ? (
+                <>
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs px-2 py-1 rounded-full bg-primary/20 text-primary font-medium">
+                        方案 A
+                      </span>
+                    </div>
+                    <MarkdownOutput content={output} isLoading={isLoading} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground font-medium">
+                        方案 B
+                      </span>
+                    </div>
+                    <MarkdownOutput content={output2} isLoading={false} />
+                  </div>
+                </>
+              ) : (
+                <MarkdownOutput content={output} isLoading={isLoading} />
+              )}
               
               {/* Chat button - only show when output exists */}
               {output && !isLoading && (

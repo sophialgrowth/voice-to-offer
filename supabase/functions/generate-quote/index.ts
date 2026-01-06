@@ -12,7 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType, model } = await req.json();
+    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType, model, generateCount = 1 } = await req.json();
+
+    console.log("Request received, generateCount:", generateCount);
 
     if (!audioBase64 && !transcript && !documentBase64) {
       throw new Error("No audio, document, or transcript provided");
@@ -140,10 +142,15 @@ serve(async (req) => {
       console.log("Transcription complete:", transcription.substring(0, 200) + "...");
     }
 
-    // Generate proposal based on transcription and price list
+    // Generate proposal(s) based on transcription and price list
     const basePrompt = customPrompt || `根据客户需求推荐2个服务套餐写成《XXX x Nexad: 市场穿透与全球增长护城河构建方案》，尽量用表格形式。分成两部分：一、汇总Customer Context，二、 推荐的解决方案`;
 
-    const quotePrompt = `${basePrompt}
+    const generateQuote = async (variation: number = 0) => {
+      const variationHint = variation === 0 
+        ? "" 
+        : "\n\n注意：请提供一个不同的方案版本，可以调整套餐组合、预算分配或策略侧重点，以便客户比较选择。";
+
+      const quotePrompt = `${basePrompt}${variationHint}
 
 以下是客户需求内容：
 ${transcription}
@@ -158,58 +165,73 @@ ${priceList}
 4. 包含投入产出预估
 5. 语言专业且有说服力`;
 
-    console.log("Generating proposal with model:", selectedModel);
+      console.log("Generating proposal with model:", selectedModel, "variation:", variation);
 
-    const quoteResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages: [
-          {
-            role: "system",
-            content: "你是 Nexad 的专业销售顾问，擅长根据客户需求制定精准的营销解决方案。你的输出应该专业、有条理、使用Markdown格式，并且重点突出客户价值。"
-          },
-          {
-            role: "user",
-            content: quotePrompt
-          }
-        ],
-      }),
-    });
+      const quoteResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [
+            {
+              role: "system",
+              content: "你是 Nexad 的专业销售顾问，擅长根据客户需求制定精准的营销解决方案。你的输出应该专业、有条理、使用Markdown格式，并且重点突出客户价值。"
+            },
+            {
+              role: "user",
+              content: quotePrompt
+            }
+          ],
+        }),
+      });
 
-    if (!quoteResponse.ok) {
-      const errorText = await quoteResponse.text();
-      console.error("Quote generation API error:", quoteResponse.status, errorText);
-      
-      if (quoteResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "请求过于频繁，请稍后再试" }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (!quoteResponse.ok) {
+        const errorText = await quoteResponse.text();
+        console.error("Quote generation API error:", quoteResponse.status, errorText);
+        
+        if (quoteResponse.status === 429) {
+          throw new Error("请求过于频繁，请稍后再试");
+        }
+        if (quoteResponse.status === 402) {
+          throw new Error("AI 服务额度已用尽，请联系管理员");
+        }
+        
+        throw new Error(`Quote generation API error: ${errorText}`);
       }
-      if (quoteResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI 服务额度已用尽，请联系管理员" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error(`Quote generation API error: ${errorText}`);
+
+      const quoteData = await quoteResponse.json();
+      return quoteData.choices?.[0]?.message?.content || "";
+    };
+
+    // Generate quotes based on count
+    const count = Math.min(Math.max(1, generateCount), 2); // Limit to 1 or 2
+    
+    let quote = "";
+    let quote2 = "";
+
+    if (count === 2) {
+      // Generate both quotes in parallel
+      console.log("Generating 2 proposals in parallel...");
+      const [result1, result2] = await Promise.all([
+        generateQuote(0),
+        generateQuote(1)
+      ]);
+      quote = result1;
+      quote2 = result2;
+    } else {
+      quote = await generateQuote(0);
     }
 
-    const quoteData = await quoteResponse.json();
-    const quote = quoteData.choices?.[0]?.message?.content || "";
-
-    console.log("Proposal generation complete");
+    console.log("Proposal generation complete, count:", count);
 
     return new Response(
       JSON.stringify({ 
         transcription,
         quote,
+        quote2: count === 2 ? quote2 : undefined,
         success: true 
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
