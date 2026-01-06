@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType, model, generateCount = 1 } = await req.json();
+    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType, model, generateCount = 1, clientBrand, productUrl } = await req.json();
 
     console.log("Request received, generateCount:", generateCount);
 
@@ -150,20 +150,27 @@ serve(async (req) => {
         ? "" 
         : "\n\n注意：请提供一个不同的方案版本，可以调整套餐组合、预算分配或策略侧重点，以便客户比较选择。";
 
-      const quotePrompt = `${basePrompt}${variationHint}
+      // Build client info section
+      const clientInfo = clientBrand || productUrl 
+        ? `\n\n【客户信息】\n- 客户品牌/公司名：${clientBrand || '未提供'}\n- 产品页面URL：${productUrl || '未提供'}`
+        : '';
 
-以下是客户需求内容：
+      const quotePrompt = `${basePrompt}${variationHint}
+${clientInfo}
+
+以下是客户需求内容（来自录音/文档）：
 ${transcription}
 
 以下是公司价目表：
 ${priceList}
 
 请根据以上信息生成专业的增长方案，使用Markdown格式输出。确保：
-1. 准确理解客户的需求和业务背景
-2. 根据客户情况推荐最合适的套餐组合
-3. 使用表格清晰展示信息
-4. 包含投入产出预估
-5. 语言专业且有说服力`;
+1. 使用客户品牌名「${clientBrand || 'XXX'}」替换方案标题中的XXX
+2. 准确理解客户的需求和业务背景
+3. 根据客户情况推荐最合适的套餐组合
+4. 使用表格清晰展示信息
+5. 包含投入产出预估
+6. 语言专业且有说服力`;
 
       console.log("Generating proposal with model:", selectedModel, "variation:", variation);
 

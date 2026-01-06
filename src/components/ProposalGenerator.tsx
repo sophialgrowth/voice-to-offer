@@ -174,6 +174,8 @@ const ProposalGenerator = () => {
         customPrompt: string;
         model: string;
         generateCount: number;
+        clientBrand: string;
+        productUrl: string;
         audioBase64?: string;
         mimeType?: string;
         transcript?: string;
@@ -183,7 +185,9 @@ const ProposalGenerator = () => {
         priceList,
         customPrompt,
         model: selectedModel,
-        generateCount: generateTwo ? 2 : 1
+        generateCount: generateTwo ? 2 : 1,
+        clientBrand,
+        productUrl
       };
 
       if (inputMode === 'audio' && selectedFile) {
