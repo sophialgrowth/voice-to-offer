@@ -5,36 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Process base64 in chunks to prevent memory issues
-function processBase64Chunks(base64String: string, chunkSize = 32768): Uint8Array {
-  const chunks: Uint8Array[] = [];
-  let position = 0;
-
-  while (position < base64String.length) {
-    const chunk = base64String.slice(position, position + chunkSize);
-    const binaryChunk = atob(chunk);
-    const bytes = new Uint8Array(binaryChunk.length);
-
-    for (let i = 0; i < binaryChunk.length; i++) {
-      bytes[i] = binaryChunk.charCodeAt(i);
-    }
-
-    chunks.push(bytes);
-    position += chunkSize;
-  }
-
-  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return result;
-}
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -42,10 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const { audioBase64, priceList, mimeType, transcript, customPrompt } = await req.json();
+    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType } = await req.json();
 
-    if (!audioBase64 && !transcript) {
-      throw new Error("No audio data or transcript provided");
+    if (!audioBase64 && !transcript && !documentBase64) {
+      throw new Error("No audio, document, or transcript provided");
     }
 
     if (!priceList) {
@@ -59,20 +29,70 @@ serve(async (req) => {
 
     let transcription = "";
 
-    // If transcript is provided directly, use it; otherwise transcribe audio
+    // If transcript is provided directly, use it
     if (transcript) {
       console.log("Using provided transcript...");
       transcription = transcript;
       console.log("Transcript length:", transcription.length);
-    } else if (audioBase64) {
+    } 
+    // If document is provided, extract text
+    else if (documentBase64) {
+      console.log("Processing document...");
+      console.log("Document type:", documentType);
+
+      const docDataUrl = `data:${documentType};base64,${documentBase64}`;
+
+      // Use Gemini to extract text from document
+      const docResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "system",
+              content: "你是一个专业的文档解析助手。请准确提取文档中的所有文本内容，保持原有的结构和格式。"
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "请提取以下文档中的所有文本内容："
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: docDataUrl
+                  }
+                }
+              ]
+            }
+          ],
+        }),
+      });
+
+      if (!docResponse.ok) {
+        const errorText = await docResponse.text();
+        console.error("Document parsing API error:", docResponse.status, errorText);
+        throw new Error(`Document parsing error: ${errorText}`);
+      }
+
+      const docData = await docResponse.json();
+      transcription = docData.choices?.[0]?.message?.content || "";
+      console.log("Document extraction complete, length:", transcription.length);
+    }
+    // If audio is provided, transcribe it
+    else if (audioBase64) {
       console.log("Processing audio transcription...");
       console.log("Audio MIME type:", mimeType);
       console.log("Audio base64 length:", audioBase64.length);
 
-      // Step 1: Transcribe audio using Gemini (which supports audio)
       const audioDataUrl = `data:${mimeType || 'audio/webm'};base64,${audioBase64}`;
 
-      // Use Gemini for transcription since it supports audio natively
       const transcriptionResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -117,58 +137,25 @@ serve(async (req) => {
       console.log("Transcription complete:", transcription.substring(0, 200) + "...");
     }
 
-    // Step 2: Generate quote based on transcription and price list
-    // Use custom prompt if provided, otherwise use default
-    const basePrompt = customPrompt || `根据客户录音推荐2个服务套餐写成《Wavenote x Nexad: 市场穿透与全球增长护城河构建方案》，尽量用表格形式。分成两部分：一、汇总Customer Context，二、 推荐的解决方案
-
-第一部分：
-一、XXX 决策背景与核心需求汇总 (Customer Context)
-表 1：战略目标与增长兴趣点 (Goals & Interests)
-目标类别
-详细描述
-投放目标
-
-预算预期
-
-核心兴趣点
-
-反向工程
-
-表 2：业务现状与产品优势 (Status Quo)
-维度
-详细情况与核心卖点
-产品核心卖点
-
-具体产品与产品类型
-
-市场竞争格局
-
-营销现状与痛点
-
-商业模式
-
-战略与节奏
-
-二、 推荐的解决方案
-套餐分成A. Nexad Growth Credits 和 B. Nexad Solution Credits 。
-A是广告投放金额（较便宜的套餐默认不填广告金额，备注优化师团队调研后决定），表格里写优化团队根据调研结果评估即可。`;
+    // Generate proposal based on transcription and price list
+    const basePrompt = customPrompt || `根据客户需求推荐2个服务套餐写成《XXX x Nexad: 市场穿透与全球增长护城河构建方案》，尽量用表格形式。分成两部分：一、汇总Customer Context，二、 推荐的解决方案`;
 
     const quotePrompt = `${basePrompt}
 
-以下是客户录音的转录内容：
+以下是客户需求内容：
 ${transcription}
 
 以下是公司价目表：
 ${priceList}
 
-请根据以上信息生成专业的报价方案，使用Markdown格式输出。确保：
+请根据以上信息生成专业的增长方案，使用Markdown格式输出。确保：
 1. 准确理解客户的需求和业务背景
 2. 根据客户情况推荐最合适的套餐组合
 3. 使用表格清晰展示信息
 4. 包含投入产出预估
 5. 语言专业且有说服力`;
 
-    console.log("Generating quote...");
+    console.log("Generating proposal...");
 
     const quoteResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -214,7 +201,7 @@ ${priceList}
     const quoteData = await quoteResponse.json();
     const quote = quoteData.choices?.[0]?.message?.content || "";
 
-    console.log("Quote generation complete");
+    console.log("Proposal generation complete");
 
     return new Response(
       JSON.stringify({ 

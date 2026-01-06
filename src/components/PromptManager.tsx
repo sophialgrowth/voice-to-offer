@@ -1,0 +1,321 @@
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useUser } from '@/hooks/useUser';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { 
+  Settings2, Plus, Star, ThumbsUp, ThumbsDown, Trash2, 
+  Check, Edit3, Sparkles, RotateCcw
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface Prompt {
+  id: string;
+  name: string;
+  content: string;
+  likes: number;
+  dislikes: number;
+  is_default: boolean;
+}
+
+interface PromptManagerProps {
+  currentPrompt: string;
+  onPromptChange: (prompt: string) => void;
+  defaultPrompt: string;
+}
+
+const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt }: PromptManagerProps) => {
+  const { user } = useUser();
+  const [isOpen, setIsOpen] = useState(false);
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
+  const [newPromptName, setNewPromptName] = useState('');
+  const [newPromptContent, setNewPromptContent] = useState('');
+  const [showNewForm, setShowNewForm] = useState(false);
+
+  const fetchPrompts = async () => {
+    if (!user) return;
+    
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_prompts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('likes', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPrompts(data || []);
+    } catch (error) {
+      console.error('Error fetching prompts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchPrompts();
+    }
+  }, [isOpen, user]);
+
+  const handleSaveNewPrompt = async () => {
+    if (!user || !newPromptName.trim() || !newPromptContent.trim()) {
+      toast.error('请填写名称和内容');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('user_prompts')
+        .insert({
+          user_id: user.id,
+          name: newPromptName.trim(),
+          content: newPromptContent.trim()
+        });
+
+      if (error) throw error;
+
+      toast.success('提示词已保存');
+      setNewPromptName('');
+      setNewPromptContent('');
+      setShowNewForm(false);
+      fetchPrompts();
+    } catch (error) {
+      console.error('Error saving prompt:', error);
+      toast.error('保存失败');
+    }
+  };
+
+  const handleSelectPrompt = (prompt: Prompt) => {
+    onPromptChange(prompt.content);
+    setIsOpen(false);
+    toast.success(`已切换到「${prompt.name}」`);
+  };
+
+  const handleUpdateLikes = async (promptId: string, isLike: boolean) => {
+    try {
+      const prompt = prompts.find(p => p.id === promptId);
+      if (!prompt) return;
+
+      const updateField = isLike ? 'likes' : 'dislikes';
+      const newValue = isLike ? prompt.likes + 1 : prompt.dislikes + 1;
+
+      const { error } = await supabase
+        .from('user_prompts')
+        .update({ [updateField]: newValue })
+        .eq('id', promptId);
+
+      if (error) throw error;
+      
+      setPrompts(prompts.map(p => 
+        p.id === promptId ? { ...p, [updateField]: newValue } : p
+      ));
+    } catch (error) {
+      console.error('Error updating likes:', error);
+    }
+  };
+
+  const handleDeletePrompt = async (promptId: string) => {
+    try {
+      const { error } = await supabase
+        .from('user_prompts')
+        .delete()
+        .eq('id', promptId);
+
+      if (error) throw error;
+      
+      toast.success('已删除');
+      fetchPrompts();
+    } catch (error) {
+      console.error('Error deleting prompt:', error);
+      toast.error('删除失败');
+    }
+  };
+
+  const handleSaveCurrentAsNew = () => {
+    setNewPromptContent(currentPrompt);
+    setShowNewForm(true);
+  };
+
+  const handleResetToDefault = () => {
+    onPromptChange(defaultPrompt);
+    toast.success('已恢复默认提示词');
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="icon" className="shrink-0">
+          <Settings2 className="w-4 h-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            提示词管理
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+          {/* Current Prompt Preview */}
+          <div className="glass-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">当前使用的提示词</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetToDefault}
+                  className="text-xs"
+                >
+                  <RotateCcw className="w-3 h-3 mr-1" />
+                  恢复默认
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSaveCurrentAsNew}
+                  className="text-xs"
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  保存为快捷方式
+                </Button>
+              </div>
+            </div>
+            <Textarea
+              value={currentPrompt}
+              onChange={(e) => onPromptChange(e.target.value)}
+              className="min-h-[100px] text-sm bg-secondary/30"
+            />
+          </div>
+
+          {/* New Prompt Form */}
+          {showNewForm && (
+            <div className="glass-card p-4 space-y-3 animate-slide-down">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">新建快捷方式</span>
+                <Button variant="ghost" size="sm" onClick={() => setShowNewForm(false)}>
+                  取消
+                </Button>
+              </div>
+              <Input
+                placeholder="快捷方式名称（如：简洁版、详细版）"
+                value={newPromptName}
+                onChange={(e) => setNewPromptName(e.target.value)}
+                className="bg-secondary/30"
+              />
+              <Textarea
+                placeholder="提示词内容"
+                value={newPromptContent}
+                onChange={(e) => setNewPromptContent(e.target.value)}
+                className="min-h-[80px] text-sm bg-secondary/30"
+              />
+              <Button onClick={handleSaveNewPrompt} className="w-full" variant="glow">
+                <Check className="w-4 h-4 mr-2" />
+                保存
+              </Button>
+            </div>
+          )}
+
+          {/* Saved Prompts List */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">
+                我的快捷方式 {prompts.length > 0 && `(${prompts.length})`}
+              </span>
+              {!showNewForm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setNewPromptContent('');
+                    setNewPromptName('');
+                    setShowNewForm(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  新建
+                </Button>
+              )}
+            </div>
+
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">加载中...</div>
+            ) : prompts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>还没有保存的快捷方式</p>
+                <p className="text-sm mt-1">点击「保存为快捷方式」来创建</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {prompts.map((prompt) => (
+                  <div
+                    key={prompt.id}
+                    className={cn(
+                      'glass-card p-4 cursor-pointer hover:border-primary/30 transition-colors',
+                      'group'
+                    )}
+                    onClick={() => handleSelectPrompt(prompt)}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-foreground">{prompt.name}</span>
+                          {prompt.likes > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs text-primary">
+                              <Star className="w-3 h-3 fill-current" />
+                              {prompt.likes}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {prompt.content}
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleUpdateLikes(prompt.id, true)}
+                        >
+                          <ThumbsUp className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleUpdateLikes(prompt.id, false)}
+                        >
+                          <ThumbsDown className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleDeletePrompt(prompt.id)}
+                        >
+                          <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default PromptManager;
