@@ -42,7 +42,7 @@ serve(async (req) => {
   }
 
   try {
-    const { audioBase64, priceList, mimeType, transcript } = await req.json();
+    const { audioBase64, priceList, mimeType, transcript, customPrompt } = await req.json();
 
     if (!audioBase64 && !transcript) {
       throw new Error("No audio data or transcript provided");
@@ -118,7 +118,8 @@ serve(async (req) => {
     }
 
     // Step 2: Generate quote based on transcription and price list
-    const quotePrompt = `根据客户录音推荐2个服务套餐写成《Wavenote x Nexad: 市场穿透与全球增长护城河构建方案》，尽量用表格形式。分成两部分：一、汇总Customer Context，二、 推荐的解决方案
+    // Use custom prompt if provided, otherwise use default
+    const basePrompt = customPrompt || `根据客户录音推荐2个服务套餐写成《Wavenote x Nexad: 市场穿透与全球增长护城河构建方案》，尽量用表格形式。分成两部分：一、汇总Customer Context，二、 推荐的解决方案
 
 第一部分：
 一、XXX 决策背景与核心需求汇总 (Customer Context)
@@ -150,7 +151,9 @@ serve(async (req) => {
 
 二、 推荐的解决方案
 套餐分成A. Nexad Growth Credits 和 B. Nexad Solution Credits 。
-A是广告投放金额（较便宜的套餐默认不填广告金额，备注优化师团队调研后决定），表格里写优化团队根据调研结果评估即可。
+A是广告投放金额（较便宜的套餐默认不填广告金额，备注优化师团队调研后决定），表格里写优化团队根据调研结果评估即可。`;
+
+    const quotePrompt = `${basePrompt}
 
 以下是客户录音的转录内容：
 ${transcription}

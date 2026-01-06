@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import AudioUploader from './AudioUploader';
 import PriceListInput from './PriceListInput';
 import MarkdownOutput from './MarkdownOutput';
+import PromptEditor from './PromptEditor';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,6 +22,40 @@ const DEFAULT_PRICE_LIST = `以下是nexad managed service价单：
 - 数据分析包：$2,500 - 归因分析、ROI追踪、优化建议
 - 全渠道整合包：$8,000 - Google+Meta+TikTok全平台管理
 - 品牌出海包：$12,000 - 品牌定位、本地化策略、KOL合作`;
+
+const DEFAULT_PROMPT = `根据客户录音推荐2个服务套餐写成《Wavenote x Nexad: 市场穿透与全球增长护城河构建方案》，尽量用表格形式。分成两部分：一、汇总Customer Context，二、 推荐的解决方案
+
+第一部分：
+一、XXX 决策背景与核心需求汇总 (Customer Context)
+表 1：战略目标与增长兴趣点 (Goals & Interests)
+目标类别
+详细描述
+投放目标
+
+预算预期
+
+核心兴趣点
+
+反向工程
+
+表 2：业务现状与产品优势 (Status Quo)
+维度
+详细情况与核心卖点
+产品核心卖点
+
+具体产品与产品类型
+
+市场竞争格局
+
+营销现状与痛点
+
+商业模式
+
+战略与节奏
+
+二、 推荐的解决方案
+套餐分成A. Nexad Growth Credits 和 B. Nexad Solution Credits 。
+A是广告投放金额（较便宜的套餐默认不填广告金额，备注优化师团队调研后决定），表格里写优化团队根据调研结果评估即可。`;
 
 // Convert file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -42,6 +77,7 @@ const QuoteGenerator = () => {
   const [transcript, setTranscript] = useState('');
   const [inputMode, setInputMode] = useState<'audio' | 'text'>('audio');
   const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
+  const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
   const [output, setOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -68,10 +104,14 @@ const QuoteGenerator = () => {
     try {
       let requestBody: {
         priceList: string;
+        customPrompt: string;
         audioBase64?: string;
         mimeType?: string;
         transcript?: string;
-      } = { priceList };
+      } = { 
+        priceList,
+        customPrompt 
+      };
 
       if (inputMode === 'audio' && audioFile) {
         // Convert audio file to base64
@@ -155,25 +195,33 @@ const QuoteGenerator = () => {
               <PriceListInput value={priceList} onChange={setPriceList} />
             </div>
 
-            <Button
-              variant="glow"
-              size="lg"
-              className="w-full"
-              onClick={generateQuote}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  生成中...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  生成报价单
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="glow"
+                size="lg"
+                className="flex-1"
+                onClick={generateQuote}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    生成报价单
+                  </>
+                )}
+              </Button>
+              
+              <PromptEditor
+                prompt={customPrompt}
+                onPromptChange={setCustomPrompt}
+                defaultPrompt={DEFAULT_PROMPT}
+              />
+            </div>
 
             {!hasValidInput && (
               <div className="flex items-start gap-3 p-4 rounded-xl bg-secondary/30 border border-border/50">
