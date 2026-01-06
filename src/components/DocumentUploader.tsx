@@ -140,7 +140,7 @@ const DocumentUploader = ({
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
             <Building2 className="w-3.5 h-3.5 text-primary" />
-            客户品牌名 <span className="text-destructive">*</span>
+            客户名/品牌名 <span className="text-destructive">*</span>
           </label>
           <Input
             value={clientBrand}

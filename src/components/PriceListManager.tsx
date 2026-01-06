@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
   FileText, Plus, Star, ThumbsUp, ThumbsDown, Trash2, 
-  Check, RotateCcw, Crown
+  Check, RotateCcw, Crown, Pencil, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +37,7 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
   const [creatorName, setCreatorName] = useState('');
   const [newContent, setNewContent] = useState('');
   const [showNewForm, setShowNewForm] = useState(false);
+  const [editingPriceList, setEditingPriceList] = useState<PriceList | null>(null);
 
   const fetchPriceLists = async () => {
     setIsLoading(true);
@@ -118,6 +119,50 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
     onVersionNameChange(priceList.name);
     setIsOpen(false);
     toast.success(`已切换到「${priceList.name}」`);
+  };
+
+  const handleEditPriceList = (priceList: PriceList, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingPriceList(priceList);
+    setNewName(priceList.name);
+    setCreatorName(priceList.creator_name);
+    setNewContent(priceList.content);
+    setShowNewForm(true);
+  };
+
+  const handleUpdatePriceList = async () => {
+    if (!editingPriceList || !newName.trim() || !newContent.trim() || !creatorName.trim()) {
+      toast.error('请填写名称、创建者和内容');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('price_lists')
+        .update({
+          name: newName.trim(),
+          creator_name: creatorName.trim(),
+          content: newContent.trim()
+        })
+        .eq('id', editingPriceList.id);
+
+      if (error) throw error;
+
+      toast.success('价目表已更新');
+      handleCancelEdit();
+      fetchPriceLists();
+    } catch (error) {
+      console.error('Error updating price list:', error);
+      toast.error('更新失败');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPriceList(null);
+    setNewName('');
+    setCreatorName('');
+    setNewContent('');
+    setShowNewForm(false);
   };
 
   const handleSetDefault = async (id: string) => {
@@ -245,12 +290,15 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
             />
           </div>
 
-          {/* New Price List Form */}
+          {/* New/Edit Price List Form */}
           {showNewForm && (
             <div className="glass-card p-4 space-y-3 animate-slide-down">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">新建价目表版本</span>
-                <Button variant="ghost" size="sm" onClick={() => setShowNewForm(false)}>
+                <span className="text-sm font-medium">
+                  {editingPriceList ? `编辑「${editingPriceList.name}」` : '新建价目表版本'}
+                </span>
+                <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                  <X className="w-4 h-4 mr-1" />
                   取消
                 </Button>
               </div>
@@ -270,11 +318,15 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
                 placeholder="价目表内容"
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}
-                className="min-h-[80px] text-sm bg-secondary/30"
+                className="min-h-[120px] text-sm bg-secondary/30"
               />
-              <Button onClick={handleSaveNew} className="w-full" variant="glow">
+              <Button 
+                onClick={editingPriceList ? handleUpdatePriceList : handleSaveNew} 
+                className="w-full" 
+                variant="glow"
+              >
                 <Check className="w-4 h-4 mr-2" />
-                保存
+                {editingPriceList ? '更新' : '保存'}
               </Button>
             </div>
           )}
@@ -347,6 +399,15 @@ const PriceListManager = ({ currentPriceList, onPriceListChange, defaultPriceLis
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => handleEditPriceList(item, e)}
+                          title="编辑"
+                        >
+                          <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                        </Button>
                         {!item.is_default && (
                           <Button
                             variant="ghost"
