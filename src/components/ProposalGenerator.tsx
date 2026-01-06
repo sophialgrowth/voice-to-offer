@@ -6,6 +6,7 @@ import PriceListInput from './PriceListInput';
 import PriceListManager from './PriceListManager';
 import MarkdownOutput from './MarkdownOutput';
 import PromptManager from './PromptManager';
+import ModelSelector, { AI_MODELS } from './ModelSelector';
 import Header from './Header';
 import ProposalHistory from './ProposalHistory';
 import ConversationChat from './ConversationChat';
@@ -91,6 +92,7 @@ const ProposalGenerator = () => {
   const [inputMode, setInputMode] = useState<InputMode>('audio');
   const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
+  const [selectedModel, setSelectedModel] = useState('google/gemini-3-pro-preview');
   const [output, setOutput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -120,6 +122,7 @@ const ProposalGenerator = () => {
       let requestBody: {
         priceList: string;
         customPrompt: string;
+        model: string;
         audioBase64?: string;
         mimeType?: string;
         transcript?: string;
@@ -127,7 +130,8 @@ const ProposalGenerator = () => {
         documentType?: string;
       } = { 
         priceList,
-        customPrompt 
+        customPrompt,
+        model: selectedModel
       };
 
       if (inputMode === 'audio' && selectedFile) {
@@ -221,7 +225,9 @@ const ProposalGenerator = () => {
           <header className="text-center mb-10 animate-slide-up">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
               <Zap className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-primary">Gemini 3.0 Pro 驱动</span>
+              <span className="text-sm font-medium text-primary">
+                {AI_MODELS.find(m => m.id === selectedModel)?.name || 'AI'} 驱动
+              </span>
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-display tracking-tight mb-4">
               为客户打造<span className="text-gradient">专属增长方案</span>
@@ -256,6 +262,10 @@ const ProposalGenerator = () => {
                     defaultPriceList={DEFAULT_PRICE_LIST}
                   />
                 </div>
+              </div>
+
+              <div className="glass-card p-6">
+                <ModelSelector value={selectedModel} onChange={setSelectedModel} />
               </div>
 
               <div className="flex items-center gap-3">

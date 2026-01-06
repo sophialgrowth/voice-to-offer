@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType } = await req.json();
+    const { audioBase64, priceList, mimeType, transcript, customPrompt, documentBase64, documentType, model } = await req.json();
 
     if (!audioBase64 && !transcript && !documentBase64) {
       throw new Error("No audio, document, or transcript provided");
@@ -26,6 +26,9 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
+
+    // Use provided model or default to Gemini 3.0 Pro
+    const selectedModel = model || "google/gemini-3-pro-preview";
 
     let transcription = "";
 
@@ -155,7 +158,7 @@ ${priceList}
 4. 包含投入产出预估
 5. 语言专业且有说服力`;
 
-    console.log("Generating proposal...");
+    console.log("Generating proposal with model:", selectedModel);
 
     const quoteResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -164,7 +167,7 @@ ${priceList}
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-pro-preview",
+        model: selectedModel,
         messages: [
           {
             role: "system",
