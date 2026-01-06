@@ -92,6 +92,8 @@ const ProposalGenerator = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [transcript, setTranscript] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('audio');
+  const [clientBrand, setClientBrand] = useState('');
+  const [productUrl, setProductUrl] = useState('');
   const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
   const [priceListVersionName, setPriceListVersionName] = useState<string | null>(null);
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
@@ -135,6 +137,17 @@ const ProposalGenerator = () => {
   }, []);
 
   const generateProposal = async () => {
+    // Validate required fields
+    if (!clientBrand.trim()) {
+      toast.error('请填写客户品牌名');
+      return;
+    }
+    
+    if (!productUrl.trim()) {
+      toast.error('请填写产品页面URL');
+      return;
+    }
+
     // Validate input based on mode
     if ((inputMode === 'audio' || inputMode === 'document') && !selectedFile) {
       toast.error(inputMode === 'audio' ? '请先上传录音文件' : '请先上传文档');
@@ -211,20 +224,22 @@ const ProposalGenerator = () => {
       }
       toast.success(generateTwo ? '2个方案生成成功！' : '方案生成成功！');
 
-      // Save to history (without user_id since login is removed)
+      // Save to history with client brand name
       try {
         await supabase.from('generated_proposals').insert({
           user_id: null,
+          client_name: clientBrand,
           input_type: inputMode,
-          input_summary: inputMode === 'text' ? transcript.slice(0, 200) : selectedFile?.name,
+          input_summary: `${productUrl} | ${inputMode === 'text' ? transcript.slice(0, 150) : selectedFile?.name}`,
           price_list: priceList,
           output_markdown: data.quote
         });
         if (data.quote2) {
           await supabase.from('generated_proposals').insert({
             user_id: null,
+            client_name: clientBrand,
             input_type: inputMode,
-            input_summary: inputMode === 'text' ? transcript.slice(0, 200) : selectedFile?.name,
+            input_summary: `${productUrl} | ${inputMode === 'text' ? transcript.slice(0, 150) : selectedFile?.name}`,
             price_list: priceList,
             output_markdown: data.quote2
           });
@@ -252,6 +267,7 @@ const ProposalGenerator = () => {
   };
 
   const hasValidInput = () => {
+    if (!clientBrand.trim() || !productUrl.trim()) return false;
     if (inputMode === 'text') return !!transcript.trim();
     return !!selectedFile;
   };
@@ -299,6 +315,10 @@ const ProposalGenerator = () => {
                   onTranscriptChange={setTranscript}
                   inputMode={inputMode}
                   onInputModeChange={setInputMode}
+                  clientBrand={clientBrand}
+                  onClientBrandChange={setClientBrand}
+                  productUrl={productUrl}
+                  onProductUrlChange={setProductUrl}
                 />
               </div>
 

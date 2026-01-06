@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, X, FileText, FileAudio, File, CheckCircle2, Mic } from 'lucide-react';
+import { Upload, X, FileText, FileAudio, File, CheckCircle2, Mic, Building2, Link } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export type InputMode = 'audio' | 'text' | 'document';
@@ -13,6 +14,10 @@ interface DocumentUploaderProps {
   onTranscriptChange: (text: string) => void;
   inputMode: InputMode;
   onInputModeChange: (mode: InputMode) => void;
+  clientBrand: string;
+  onClientBrandChange: (brand: string) => void;
+  productUrl: string;
+  onProductUrlChange: (url: string) => void;
 }
 
 const ACCEPTED_AUDIO = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/webm'];
@@ -29,7 +34,11 @@ const DocumentUploader = ({
   transcript, 
   onTranscriptChange,
   inputMode,
-  onInputModeChange
+  onInputModeChange,
+  clientBrand,
+  onClientBrandChange,
+  productUrl,
+  onProductUrlChange
 }: DocumentUploaderProps) => {
   const [isDragActive, setIsDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -126,9 +135,37 @@ const DocumentUploader = ({
 
   return (
     <div className="space-y-5">
+      {/* Required Client Info */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-primary" />
+            客户品牌名 <span className="text-destructive">*</span>
+          </label>
+          <Input
+            value={clientBrand}
+            onChange={(e) => onClientBrandChange(e.target.value)}
+            placeholder="例如：小米、字节跳动"
+            className="bg-secondary/30 border-border/50"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+            <Link className="w-3.5 h-3.5 text-primary" />
+            产品页面URL <span className="text-destructive">*</span>
+          </label>
+          <Input
+            value={productUrl}
+            onChange={(e) => onProductUrlChange(e.target.value)}
+            placeholder="https://..."
+            className="bg-secondary/30 border-border/50"
+          />
+        </div>
+      </div>
+
       {/* Mode Tabs */}
       <div>
-        <label className="text-sm font-medium text-foreground mb-3 block">客户需求输入</label>
+        <label className="text-sm font-medium text-foreground mb-3 block">客户需求详情</label>
         <Tabs value={inputMode} onValueChange={handleModeChange}>
           <TabsList className="grid grid-cols-3 bg-secondary/50">
             <TabsTrigger value="audio" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">

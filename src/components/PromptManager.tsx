@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { 
   Settings2, Plus, Star, ThumbsUp, ThumbsDown, Trash2, 
-  Check, Sparkles, RotateCcw, Crown
+  Check, Sparkles, RotateCcw, Crown, Pencil, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +37,7 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt, selectedV
   const [creatorName, setCreatorName] = useState('');
   const [newPromptContent, setNewPromptContent] = useState('');
   const [showNewForm, setShowNewForm] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
 
   const fetchPrompts = async () => {
     setIsLoading(true);
@@ -189,12 +190,67 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt, selectedV
   const handleSaveCurrentAsNew = () => {
     setNewPromptContent(currentPrompt);
     setShowNewForm(true);
+    setEditingPrompt(null);
   };
 
   const handleResetToDefault = () => {
     onPromptChange(defaultPrompt);
     onVersionNameChange(null);
     toast.success('已恢复默认提示词');
+  };
+
+  const handleEditPrompt = (prompt: Prompt, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingPrompt(prompt);
+    setNewPromptName(prompt.name);
+    setCreatorName(prompt.creator_name || '');
+    setNewPromptContent(prompt.content);
+    setShowNewForm(true);
+  };
+
+  const handleUpdatePrompt = async () => {
+    if (!editingPrompt || !newPromptName.trim() || !newPromptContent.trim()) {
+      toast.error('请填写名称和内容');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('user_prompts')
+        .update({
+          name: newPromptName.trim(),
+          creator_name: creatorName.trim() || null,
+          content: newPromptContent.trim()
+        })
+        .eq('id', editingPrompt.id);
+
+      if (error) throw error;
+
+      toast.success('提示词已更新');
+      setNewPromptName('');
+      setCreatorName('');
+      setNewPromptContent('');
+      setShowNewForm(false);
+      setEditingPrompt(null);
+      fetchPrompts();
+      
+      // If currently using this prompt, update the content
+      if (selectedVersionName === editingPrompt.name) {
+        onPromptChange(newPromptContent.trim());
+        onVersionNameChange(newPromptName.trim());
+      }
+    } catch (error) {
+      console.error('Error updating prompt:', error);
+      toast.error('更新失败');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setShowNewForm(false);
+    setEditingPrompt(null);
+    setNewPromptName('');
+    setCreatorName('');
+    setNewPromptContent('');
   };
 
   return (
@@ -245,12 +301,15 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt, selectedV
             />
           </div>
 
-          {/* New Prompt Form */}
+          {/* New/Edit Prompt Form */}
           {showNewForm && (
             <div className="glass-card p-4 space-y-3 animate-slide-down">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">新建快捷方式</span>
-                <Button variant="ghost" size="sm" onClick={() => setShowNewForm(false)}>
+                <span className="text-sm font-medium">
+                  {editingPrompt ? '编辑提示词' : '新建快捷方式'}
+                </span>
+                <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
+                  <X className="w-4 h-4 mr-1" />
                   取消
                 </Button>
               </div>
@@ -272,9 +331,13 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt, selectedV
                 onChange={(e) => setNewPromptContent(e.target.value)}
                 className="min-h-[80px] text-sm bg-secondary/30"
               />
-              <Button onClick={handleSaveNewPrompt} className="w-full" variant="glow">
+              <Button 
+                onClick={editingPrompt ? handleUpdatePrompt : handleSaveNewPrompt} 
+                className="w-full" 
+                variant="glow"
+              >
                 <Check className="w-4 h-4 mr-2" />
-                保存
+                {editingPrompt ? '更新' : '保存'}
               </Button>
             </div>
           )}
@@ -349,6 +412,15 @@ const PromptManager = ({ currentPrompt, onPromptChange, defaultPrompt, selectedV
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => handleEditPrompt(prompt, e)}
+                          title="编辑"
+                        >
+                          <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                        </Button>
                         {!prompt.is_default && (
                           <Button
                             variant="ghost"
