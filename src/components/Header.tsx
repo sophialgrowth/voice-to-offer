@@ -15,9 +15,9 @@ const Header = ({ onHistoryClick }: HeaderProps) => {
               <Zap className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold font-display tracking-tight">
+<h1 className="text-lg font-bold font-display tracking-tight">
                 <span className="text-gradient">Nexad</span>
-                <span className="text-foreground"> ProposalAI</span>
+                <span className="text-foreground"> BD2Proposal</span>
               </h1>
             </div>
           </div>

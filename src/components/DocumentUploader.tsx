@@ -1,11 +1,14 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, X, FileText, FileAudio, File, CheckCircle2, Mic, Building2, Link } from 'lucide-react';
+import { Upload, X, FileText, FileAudio, File, CheckCircle2, Mic, Building2, Link, ExternalLink, Loader2, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { firecrawlApi } from '@/lib/api/firecrawl';
+import { toast } from 'sonner';
 
-export type InputMode = 'audio' | 'text' | 'document';
+export type InputMode = 'url' | 'document' | 'text' | 'audio';
 
 interface DocumentUploaderProps {
   onFileSelect: (file: File | null) => void;
@@ -18,6 +21,10 @@ interface DocumentUploaderProps {
   onClientBrandChange: (brand: string) => void;
   productUrl: string;
   onProductUrlChange: (url: string) => void;
+  meetingUrl: string;
+  onMeetingUrlChange: (url: string) => void;
+  scrapedContent: string;
+  onScrapedContentChange: (content: string) => void;
 }
 
 const ACCEPTED_AUDIO = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/webm'];
@@ -38,9 +45,15 @@ const DocumentUploader = ({
   clientBrand,
   onClientBrandChange,
   productUrl,
-  onProductUrlChange
+  onProductUrlChange,
+  meetingUrl,
+  onMeetingUrlChange,
+  scrapedContent,
+  onScrapedContentChange
 }: DocumentUploaderProps) => {
   const [isDragActive, setIsDragActive] = useState(false);
+  const [isScraping, setIsScraping] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const getAcceptedTypes = () => {
@@ -133,6 +146,39 @@ const DocumentUploader = ({
     }
   };
 
+  const handleScrapeUrl = async () => {
+    if (!meetingUrl.trim()) {
+      toast.error('请先输入会议纪要链接');
+      return;
+    }
+
+    setIsScraping(true);
+    try {
+      const response = await firecrawlApi.scrape(meetingUrl.trim(), {
+        formats: ['markdown'],
+        onlyMainContent: true,
+      });
+
+      if (response.success) {
+        const content = response.data?.markdown || response.data?.data?.markdown || '';
+        if (content) {
+          onScrapedContentChange(content);
+          setShowPreview(true);
+          toast.success('会议纪要内容读取成功！');
+        } else {
+          toast.error('未能提取到内容，请检查链接是否正确');
+        }
+      } else {
+        toast.error(response.error || '读取失败，请检查链接是否可访问');
+      }
+    } catch (error) {
+      console.error('Error scraping URL:', error);
+      toast.error('读取失败，请稍后重试');
+    } finally {
+      setIsScraping(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Required Client Info */}
@@ -163,29 +209,119 @@ const DocumentUploader = ({
         </div>
       </div>
 
-      {/* Mode Tabs */}
+      {/* Mode Tabs - 调整顺序: URL优先, 文档其次, 文本第三, 音频最后 */}
       <div>
-        <label className="text-sm font-medium text-foreground mb-3 block">客户需求详情</label>
+        <label className="text-sm font-medium text-foreground mb-3 block">BD会议详情</label>
         <Tabs value={inputMode} onValueChange={handleModeChange}>
-          <TabsList className="grid grid-cols-3 bg-secondary/50">
-            <TabsTrigger value="audio" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
-              <Mic className="w-4 h-4 mr-2" />
-              音频录音
+          <TabsList className="grid grid-cols-4 bg-secondary/50">
+            <TabsTrigger value="url" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+              <ExternalLink className="w-4 h-4 mr-1.5" />
+              会议链接
             </TabsTrigger>
             <TabsTrigger value="document" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
-              <FileText className="w-4 h-4 mr-2" />
-              文档上传
+              <FileText className="w-4 h-4 mr-1.5" />
+              文档
             </TabsTrigger>
             <TabsTrigger value="text" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
-              <File className="w-4 h-4 mr-2" />
-              文本输入
+              <File className="w-4 h-4 mr-1.5" />
+              文本
+            </TabsTrigger>
+            <TabsTrigger value="audio" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+              <Mic className="w-4 h-4 mr-1.5" />
+              录音
             </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
-      {inputMode !== 'text' ? (
-        /* File Upload Mode */
+      {/* URL Input Mode */}
+      {inputMode === 'url' && (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              value={meetingUrl}
+              onChange={(e) => onMeetingUrlChange(e.target.value)}
+              placeholder="粘贴飞书/腾讯会议/Notion等会议纪要链接..."
+              className="bg-secondary/30 border-border/50 flex-1"
+            />
+            <Button 
+              onClick={handleScrapeUrl} 
+              disabled={isScraping || !meetingUrl.trim()}
+              variant="outline"
+              className="shrink-0"
+            >
+              {isScraping ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  读取中...
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  读取内容
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="text-xs text-muted-foreground bg-secondary/30 p-3 rounded-lg">
+            <p className="font-medium mb-1">💡 支持的平台：</p>
+            <p>飞书会议纪要、腾讯会议纪要、Notion页面、Google Docs（公开链接）等</p>
+            <p className="mt-1 text-amber-500/80">⚠️ 注意：需确保链接公开可访问，私有链接可能无法读取</p>
+          </div>
+
+          {/* Scraped Content Preview */}
+          {scrapedContent && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-primary">
+                  <CheckCircle2 className="w-4 h-4" />
+                  已读取 {scrapedContent.length} 个字符
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowPreview(!showPreview)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Eye className="w-4 h-4 mr-1" />
+                  {showPreview ? '收起预览' : '查看内容'}
+                </Button>
+              </div>
+              
+              {showPreview && (
+                <div className="max-h-[200px] overflow-y-auto bg-secondary/30 border border-border/50 rounded-lg p-3">
+                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
+                    {scrapedContent.slice(0, 2000)}
+                    {scrapedContent.length > 2000 && '\n\n... (内容过长，仅显示前2000字符)'}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Text Input Mode */}
+      {inputMode === 'text' && (
+        <div className="space-y-2">
+          <Textarea
+            value={transcript}
+            onChange={(e) => onTranscriptChange(e.target.value)}
+            placeholder="请粘贴客户对话的文字记录或会议纪要...&#10;&#10;例如：&#10;客户：我们是一家做智能硬件的公司，想要拓展海外市场...&#10;销售：您目前有哪些市场是重点关注的？&#10;客户：主要是北美和欧洲市场..."
+            className="min-h-[180px] bg-secondary/30 border-border/50 resize-none focus:border-primary/50 focus:ring-primary/20 placeholder:text-muted-foreground/60"
+          />
+          {transcript && (
+            <div className="flex items-center gap-2 text-sm text-primary">
+              <CheckCircle2 className="w-4 h-4" />
+              已输入 {transcript.length} 个字符
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* File Upload Mode (Audio/Document) */}
+      {(inputMode === 'audio' || inputMode === 'document') && (
         <div
           className={cn(
             'upload-zone cursor-pointer relative',
@@ -244,22 +380,6 @@ const DocumentUploader = ({
                   或点击选择文件 • {getUploadHint()}
                 </p>
               </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Text Input Mode */
-        <div className="space-y-2">
-          <Textarea
-            value={transcript}
-            onChange={(e) => onTranscriptChange(e.target.value)}
-            placeholder="请粘贴客户对话的文字记录或会议纪要...&#10;&#10;例如：&#10;客户：我们是一家做智能硬件的公司，想要拓展海外市场...&#10;销售：您目前有哪些市场是重点关注的？&#10;客户：主要是北美和欧洲市场..."
-            className="min-h-[180px] bg-secondary/30 border-border/50 resize-none focus:border-primary/50 focus:ring-primary/20 placeholder:text-muted-foreground/60"
-          />
-          {transcript && (
-            <div className="flex items-center gap-2 text-sm text-primary">
-              <CheckCircle2 className="w-4 h-4" />
-              已输入 {transcript.length} 个字符
             </div>
           )}
         </div>
