@@ -92,9 +92,11 @@ const readTextFile = (file: File): Promise<string> => {
 const ProposalGenerator = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [transcript, setTranscript] = useState('');
-  const [inputMode, setInputMode] = useState<InputMode>('audio');
+  const [inputMode, setInputMode] = useState<InputMode>('url');
   const [clientBrand, setClientBrand] = useState('');
   const [productUrl, setProductUrl] = useState('');
+  const [meetingUrl, setMeetingUrl] = useState('');
+  const [scrapedContent, setScrapedContent] = useState('');
   const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
   const [priceListVersionName, setPriceListVersionName] = useState<string | null>(null);
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
@@ -161,6 +163,11 @@ const ProposalGenerator = () => {
       return;
     }
 
+    if (inputMode === 'url' && !scrapedContent.trim()) {
+      toast.error('请先读取会议纪要内容');
+      return;
+    }
+
     if (!priceList.trim()) {
       toast.error('请填写公司价目表');
       return;
@@ -209,6 +216,8 @@ const ProposalGenerator = () => {
           requestBody.documentBase64 = docBase64;
           requestBody.documentType = selectedFile.type;
         }
+      } else if (inputMode === 'url') {
+        requestBody.transcript = scrapedContent;
       } else {
         requestBody.transcript = transcript;
       }
@@ -277,6 +286,7 @@ const ProposalGenerator = () => {
   const hasValidInput = () => {
     if (!clientBrand.trim() || !productUrl.trim()) return false;
     if (inputMode === 'text') return !!transcript.trim();
+    if (inputMode === 'url') return !!scrapedContent.trim();
     return !!selectedFile;
   };
 
@@ -305,10 +315,10 @@ const ProposalGenerator = () => {
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-display tracking-tight mb-4">
-              为客户打造<span className="text-gradient">专属增长方案</span>
+              BD会议到<span className="text-gradient">专属增长方案</span>
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              上传客户需求，AI 自动分析并生成专业的 Nexad 增长方案
+              输入BD会议纪要，AI 自动分析并生成专业的 Nexad 增长方案
             </p>
           </header>
 
@@ -327,6 +337,10 @@ const ProposalGenerator = () => {
                   onClientBrandChange={setClientBrand}
                   productUrl={productUrl}
                   onProductUrlChange={setProductUrl}
+                  meetingUrl={meetingUrl}
+                  onMeetingUrlChange={setMeetingUrl}
+                  scrapedContent={scrapedContent}
+                  onScrapedContentChange={setScrapedContent}
                 />
               </div>
 
