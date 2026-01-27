@@ -236,6 +236,18 @@ ${useMarkdown ? '4. 使用表格清晰展示信息' : '4. 使用清晰的层级�
       return quoteData.choices?.[0]?.message?.content || "";
     };
 
+    // If generateCount is 0, just return the transcription (for document/audio extraction only)
+    if (generateCount === 0) {
+      console.log("Extraction only mode, returning transcription");
+      return new Response(
+        JSON.stringify({ 
+          transcription,
+          success: true 
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Generate quotes based on count
     const count = Math.min(Math.max(1, generateCount), 2); // Limit to 1 or 2
     

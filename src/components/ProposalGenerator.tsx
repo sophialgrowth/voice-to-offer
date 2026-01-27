@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, AlertCircle, Zap, MessageSquare, FileText, Settings2, Copy, FileCode } from 'lucide-react';
+import { Sparkles, AlertCircle, Zap, MessageSquare, FileText, Settings2, Copy, FileCode, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import DocumentUploader, { InputMode } from './DocumentUploader';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import DocumentUploader, { InputMode, MultiInput } from './DocumentUploader';
 import PriceListInput from './PriceListInput';
 import PriceListManager from './PriceListManager';
 import MarkdownOutput from './MarkdownOutput';
@@ -65,6 +68,13 @@ const DEFAULT_PROMPT = `根据客户需求推荐2个服务套餐写成《XXX x N
 套餐分成A. Nexad Growth Credits 和 B. Nexad Solution Credits 。
 A是广告投放金额（较便宜的套餐默认不填广告金额，备注优化师团队调研后决定），表格里写优化团队根据调研结果评估即可。`;
 
+const LANGUAGE_OPTIONS = [
+  { value: 'zh', label: '中文' },
+  { value: 'en', label: 'English' },
+  { value: 'zh-en', label: '中英对照' },
+  { value: 'custom', label: '自定义' }
+];
+
 // Convert file to base64
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -90,13 +100,15 @@ const readTextFile = (file: File): Promise<string> => {
 };
 
 const ProposalGenerator = () => {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [transcript, setTranscript] = useState('');
+  const [multiInput, setMultiInput] = useState<MultiInput>({
+    urls: [{ id: crypto.randomUUID(), url: '', content: '', loading: false }],
+    documents: [],
+    texts: [''],
+    audios: []
+  });
   const [inputMode, setInputMode] = useState<InputMode>('url');
   const [clientBrand, setClientBrand] = useState('');
-  const [productUrl, setProductUrl] = useState('');
-  const [meetingUrl, setMeetingUrl] = useState('');
-  const [scrapedContent, setScrapedContent] = useState('');
+  const [productUrls, setProductUrls] = useState<string[]>(['']);
   const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
   const [priceListVersionName, setPriceListVersionName] = useState<string | null>(null);
   const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
@@ -109,6 +121,11 @@ const ProposalGenerator = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [generateTwo, setGenerateTwo] = useState(false);
   const [useMarkdown, setUseMarkdown] = useState(true);
+  
+  // New features
+  const [outputLanguage, setOutputLanguage] = useState('zh');
+  const [customLanguage, setCustomLanguage] = useState('');
+  const [additionalNotes, setAdditionalNotes] = useState('');
 
   // Load default versions on mount
   useEffect(() => {
@@ -147,24 +164,29 @@ const ProposalGenerator = () => {
       return;
     }
     
-    if (!productUrl.trim()) {
-      toast.error('请填写产品页面URL');
+    const validProductUrls = productUrls.filter(u => u.trim());
+    if (validProductUrls.length === 0) {
+      toast.error('请填写至少一个产品页面URL');
       return;
     }
 
-    // Validate input based on mode
-    if ((inputMode === 'audio' || inputMode === 'document') && !selectedFile) {
-      toast.error(inputMode === 'audio' ? '请先上传录音文件' : '请先上传文档');
-      return;
-    }
+    // Gather all input content
+    const allContent: string[] = [];
     
-    if (inputMode === 'text' && !transcript.trim()) {
-      toast.error('请先输入客户需求文本');
-      return;
-    }
+    // URL content
+    const urlContents = multiInput.urls.filter(u => u.content.trim()).map(u => u.content);
+    allContent.push(...urlContents);
+    
+    // Text content
+    const textContents = multiInput.texts.filter(t => t.trim());
+    allContent.push(...textContents);
 
-    if (inputMode === 'url' && !scrapedContent.trim()) {
-      toast.error('请先读取会议纪要内容');
+    // Check if we have documents or audios that need processing
+    const hasDocsToProcess = multiInput.documents.length > 0;
+    const hasAudiosToProcess = multiInput.audios.length > 0;
+
+    if (allContent.length === 0 && !hasDocsToProcess && !hasAudiosToProcess) {
+      toast.error('请至少添加一个会议详情输入（链接、文档、文本或录音）');
       return;
     }
 
@@ -178,49 +200,89 @@ const ProposalGenerator = () => {
     setOutput2('');
 
     try {
-      let requestBody: {
-        priceList: string;
-        customPrompt: string;
-        model: string;
-        generateCount: number;
-        clientBrand: string;
-        productUrl: string;
-        useMarkdown: boolean;
-        audioBase64?: string;
-        mimeType?: string;
-        transcript?: string;
-        documentBase64?: string;
-        documentType?: string;
-      } = { 
+      // Prepare language instruction
+      let languageInstruction = '';
+      if (outputLanguage === 'zh') {
+        languageInstruction = '请使用中文输出。';
+      } else if (outputLanguage === 'en') {
+        languageInstruction = 'Please output in English.';
+      } else if (outputLanguage === 'zh-en') {
+        languageInstruction = '请使用中英双语对照输出，每段内容先中文后英文。';
+      } else if (outputLanguage === 'custom' && customLanguage.trim()) {
+        languageInstruction = `请使用${customLanguage}输出。`;
+      }
+
+      // Combine prompt with additional notes
+      let finalPrompt = customPrompt;
+      if (additionalNotes.trim()) {
+        finalPrompt = `${customPrompt}\n\n【用户额外要求】\n${additionalNotes}`;
+      }
+      if (languageInstruction) {
+        finalPrompt = `${finalPrompt}\n\n【输出语言】\n${languageInstruction}`;
+      }
+
+      // Process documents
+      for (const doc of multiInput.documents) {
+        if (doc.type === 'text/plain' || doc.type === 'text/markdown') {
+          const textContent = await readTextFile(doc);
+          allContent.push(`[文档: ${doc.name}]\n${textContent}`);
+        } else {
+          // For PDF/DOC, we'll send as base64
+          const docBase64 = await fileToBase64(doc);
+          // Call API to extract text from document
+          const { data: docData, error: docError } = await supabase.functions.invoke('generate-quote', {
+            body: {
+              documentBase64: docBase64,
+              documentType: doc.type,
+              priceList,
+              customPrompt: '请提取文档中的所有文本内容',
+              model: selectedModel,
+              generateCount: 0, // Just extract, don't generate
+              clientBrand,
+              productUrl: validProductUrls.join(' | '),
+              useMarkdown: false
+            }
+          });
+          if (docData?.transcription) {
+            allContent.push(`[文档: ${doc.name}]\n${docData.transcription}`);
+          }
+        }
+      }
+
+      // Process audios
+      for (const audio of multiInput.audios) {
+        const audioBase64 = await fileToBase64(audio);
+        const { data: audioData, error: audioError } = await supabase.functions.invoke('generate-quote', {
+          body: {
+            audioBase64,
+            mimeType: audio.type,
+            priceList,
+            customPrompt: '请转录音频内容',
+            model: selectedModel,
+            generateCount: 0,
+            clientBrand,
+            productUrl: validProductUrls.join(' | '),
+            useMarkdown: false
+          }
+        });
+        if (audioData?.transcription) {
+          allContent.push(`[录音: ${audio.name}]\n${audioData.transcription}`);
+        }
+      }
+
+      // Now generate the proposal with all content
+      const combinedTranscript = allContent.join('\n\n---\n\n');
+
+      const requestBody = {
         priceList,
-        customPrompt,
+        customPrompt: finalPrompt,
         model: selectedModel,
         generateCount: generateTwo ? 2 : 1,
         clientBrand,
-        productUrl,
-        useMarkdown
+        productUrl: validProductUrls.join(' | '),
+        useMarkdown,
+        transcript: combinedTranscript
       };
-
-      if (inputMode === 'audio' && selectedFile) {
-        const audioBase64 = await fileToBase64(selectedFile);
-        requestBody.audioBase64 = audioBase64;
-        requestBody.mimeType = selectedFile.type;
-      } else if (inputMode === 'document' && selectedFile) {
-        // For text files, read content directly
-        if (selectedFile.type === 'text/plain') {
-          const textContent = await readTextFile(selectedFile);
-          requestBody.transcript = textContent;
-        } else {
-          // For PDF/DOC, send as base64 for processing
-          const docBase64 = await fileToBase64(selectedFile);
-          requestBody.documentBase64 = docBase64;
-          requestBody.documentType = selectedFile.type;
-        }
-      } else if (inputMode === 'url') {
-        requestBody.transcript = scrapedContent;
-      } else {
-        requestBody.transcript = transcript;
-      }
       
       const { data, error } = await supabase.functions.invoke('generate-quote', {
         body: requestBody
@@ -243,11 +305,12 @@ const ProposalGenerator = () => {
 
       // Save to history with client brand name
       try {
+        const inputSummary = `${validProductUrls[0]} | ${getInputSummary()}`;
         await supabase.from('generated_proposals').insert({
           user_id: null,
           client_name: clientBrand,
-          input_type: inputMode,
-          input_summary: `${productUrl} | ${inputMode === 'text' ? transcript.slice(0, 150) : selectedFile?.name}`,
+          input_type: 'multi',
+          input_summary: inputSummary.slice(0, 200),
           price_list: priceList,
           output_markdown: data.quote
         });
@@ -255,8 +318,8 @@ const ProposalGenerator = () => {
           await supabase.from('generated_proposals').insert({
             user_id: null,
             client_name: clientBrand,
-            input_type: inputMode,
-            input_summary: `${productUrl} | ${inputMode === 'text' ? transcript.slice(0, 150) : selectedFile?.name}`,
+            input_type: 'multi',
+            input_summary: inputSummary.slice(0, 200),
             price_list: priceList,
             output_markdown: data.quote2
           });
@@ -283,11 +346,25 @@ const ProposalGenerator = () => {
     }
   };
 
+  const getInputSummary = () => {
+    const counts = [];
+    if (multiInput.urls.filter(u => u.content).length > 0) counts.push(`${multiInput.urls.filter(u => u.content).length}链接`);
+    if (multiInput.documents.length > 0) counts.push(`${multiInput.documents.length}文档`);
+    if (multiInput.texts.filter(t => t.trim()).length > 0) counts.push(`${multiInput.texts.filter(t => t.trim()).length}文本`);
+    if (multiInput.audios.length > 0) counts.push(`${multiInput.audios.length}录音`);
+    return counts.length > 0 ? counts.join('+') : '无';
+  };
+
   const hasValidInput = () => {
-    if (!clientBrand.trim() || !productUrl.trim()) return false;
-    if (inputMode === 'text') return !!transcript.trim();
-    if (inputMode === 'url') return !!scrapedContent.trim();
-    return !!selectedFile;
+    if (!clientBrand.trim()) return false;
+    if (!productUrls.some(u => u.trim())) return false;
+    
+    const hasUrls = multiInput.urls.some(u => u.content.trim());
+    const hasTexts = multiInput.texts.some(t => t.trim());
+    const hasDocs = multiInput.documents.length > 0;
+    const hasAudios = multiInput.audios.length > 0;
+    
+    return hasUrls || hasTexts || hasDocs || hasAudios;
   };
 
   const handleHistorySelect = (markdown: string) => {
@@ -327,20 +404,14 @@ const ProposalGenerator = () => {
             <div className="space-y-5 animate-slide-up delay-100">
               <div className="glass-card p-6">
                 <DocumentUploader
-                  selectedFile={selectedFile}
-                  onFileSelect={setSelectedFile}
-                  transcript={transcript}
-                  onTranscriptChange={setTranscript}
+                  multiInput={multiInput}
+                  onMultiInputChange={setMultiInput}
                   inputMode={inputMode}
                   onInputModeChange={setInputMode}
                   clientBrand={clientBrand}
                   onClientBrandChange={setClientBrand}
-                  productUrl={productUrl}
-                  onProductUrlChange={setProductUrl}
-                  meetingUrl={meetingUrl}
-                  onMeetingUrlChange={setMeetingUrl}
-                  scrapedContent={scrapedContent}
-                  onScrapedContentChange={setScrapedContent}
+                  productUrls={productUrls}
+                  onProductUrlsChange={setProductUrls}
                 />
               </div>
 
@@ -358,7 +429,7 @@ const ProposalGenerator = () => {
                     </div>
                     <PriceListInput value={priceList} onChange={(v) => {
                       setPriceList(v);
-                      setPriceListVersionName(null); // 手动编辑后清除版本名
+                      setPriceListVersionName(null);
                     }} />
                   </div>
                   <PriceListManager
@@ -374,7 +445,49 @@ const ProposalGenerator = () => {
               <div className="glass-card p-6 space-y-4">
                 <ModelSelector value={selectedModel} onChange={setSelectedModel} />
                 
-                {/* Markdown Toggle - 明显的开关 */}
+                {/* Language Selector */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-primary" />
+                    <Label className="text-sm font-medium">输出语言</Label>
+                  </div>
+                  <div className="flex gap-2">
+                    <Select value={outputLanguage} onValueChange={setOutputLanguage}>
+                      <SelectTrigger className="bg-secondary/30 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {outputLanguage === 'custom' && (
+                      <Input
+                        value={customLanguage}
+                        onChange={(e) => setCustomLanguage(e.target.value)}
+                        placeholder="输入语言，如：日语、法语..."
+                        className="bg-secondary/30 border-border/50 flex-1"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Additional Notes */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Settings2 className="w-4 h-4 text-primary" />
+                    额外建议（可选）
+                  </Label>
+                  <Textarea
+                    value={additionalNotes}
+                    onChange={(e) => setAdditionalNotes(e.target.value)}
+                    placeholder="输入额外的生成要求或建议，例如：重点突出ROI、多强调创意服务..."
+                    className="min-h-[80px] bg-secondary/30 border-border/50 resize-none text-sm"
+                  />
+                </div>
+                
+                {/* Markdown Toggle */}
                 <div className={cn(
                   "flex items-center justify-between p-3 rounded-xl border-2 transition-colors",
                   useMarkdown 
@@ -468,12 +581,7 @@ const ProposalGenerator = () => {
                   <div className="text-sm text-muted-foreground">
                     <p className="font-medium text-foreground/80">提示</p>
                     <p className="mt-1">
-                      {inputMode === 'audio' 
-                        ? '录音文件将由 AI 进行语音识别和内容分析'
-                        : inputMode === 'document'
-                        ? '支持 TXT、PDF、DOC 格式的文档'
-                        : '请输入完整的客户需求描述'
-                      }
+                      请填写客户信息、产品URL，并添加至少一个BD会议详情（链接/文档/文本/录音）
                     </p>
                   </div>
                 </div>
