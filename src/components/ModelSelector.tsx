@@ -16,28 +16,40 @@ export const AI_MODELS: AIModel[] = [
     description: '最新一代 Pro 模型，推理能力最强'
   },
   {
+    id: 'google/gemini-3-flash-preview',
+    name: 'Gemini 3.0 Flash',
+    provider: 'Google',
+    description: '最新一代 Flash 模型，速度与能力平衡'
+  },
+  {
     id: 'google/gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
     provider: 'Google',
     description: '顶级多模态模型，复杂推理能力强'
   },
   {
+    id: 'google/gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    provider: 'Google',
+    description: '快速响应，性价比高'
+  },
+  {
+    id: 'openai/gpt-5.2',
+    name: 'GPT-5.2',
+    provider: 'OpenAI',
+    description: '最新旗舰模型，推理能力最强'
+  },
+  {
     id: 'openai/gpt-5',
     name: 'GPT-5',
     provider: 'OpenAI',
-    description: '最强通用模型，准确性和细腻度最佳'
+    description: '强大通用模型，准确性和细腻度佳'
   },
   {
     id: 'openai/gpt-5-mini',
     name: 'GPT-5 Mini',
     provider: 'OpenAI',
     description: '高性价比版本，保持强推理能力'
-  },
-  {
-    id: 'google/gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    provider: 'Google',
-    description: '快速响应，适合简单任务'
   }
 ];
 

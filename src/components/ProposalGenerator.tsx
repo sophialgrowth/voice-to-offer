@@ -99,59 +99,126 @@ const readTextFile = (file: File): Promise<string> => {
   });
 };
 
+const CACHE_KEY = 'nexad-proposal-draft';
+
+interface CachedData {
+  multiInput: {
+    urls: { id: string; url: string; content: string }[];
+    texts: string[];
+  };
+  inputMode: InputMode;
+  clientBrand: string;
+  productUrls: string[];
+  priceList: string;
+  priceListVersionName: string | null;
+  customPrompt: string;
+  promptVersionName: string | null;
+  selectedModel: string;
+  outputLanguage: string;
+  customLanguage: string;
+  additionalNotes: string;
+  generateTwo: boolean;
+  useMarkdown: boolean;
+}
+
 const ProposalGenerator = () => {
-  const [multiInput, setMultiInput] = useState<MultiInput>({
-    urls: [{ id: crypto.randomUUID(), url: '', content: '', loading: false }],
-    documents: [],
-    texts: [''],
-    audios: []
+  // Load cached data on initial render
+  const getCachedData = (): Partial<CachedData> => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.error('Failed to load cached data:', e);
+    }
+    return {};
+  };
+
+  const cachedData = getCachedData();
+
+  const [multiInput, setMultiInput] = useState<MultiInput>(() => {
+    const cached = cachedData.multiInput;
+    return {
+      urls: cached?.urls?.length ? cached.urls.map(u => ({ ...u, loading: false })) : [{ id: crypto.randomUUID(), url: '', content: '', loading: false }],
+      documents: [], // Files can't be cached
+      texts: cached?.texts?.length ? cached.texts : [''],
+      audios: [] // Files can't be cached
+    };
   });
-  const [inputMode, setInputMode] = useState<InputMode>('url');
-  const [clientBrand, setClientBrand] = useState('');
-  const [productUrls, setProductUrls] = useState<string[]>(['']);
-  const [priceList, setPriceList] = useState(DEFAULT_PRICE_LIST);
-  const [priceListVersionName, setPriceListVersionName] = useState<string | null>(null);
-  const [customPrompt, setCustomPrompt] = useState(DEFAULT_PROMPT);
-  const [promptVersionName, setPromptVersionName] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState('google/gemini-3-pro-preview');
+  const [inputMode, setInputMode] = useState<InputMode>(cachedData.inputMode || 'url');
+  const [clientBrand, setClientBrand] = useState(cachedData.clientBrand || '');
+  const [productUrls, setProductUrls] = useState<string[]>(cachedData.productUrls?.length ? cachedData.productUrls : ['']);
+  const [priceList, setPriceList] = useState(cachedData.priceList || DEFAULT_PRICE_LIST);
+  const [priceListVersionName, setPriceListVersionName] = useState<string | null>(cachedData.priceListVersionName || null);
+  const [customPrompt, setCustomPrompt] = useState(cachedData.customPrompt || DEFAULT_PROMPT);
+  const [promptVersionName, setPromptVersionName] = useState<string | null>(cachedData.promptVersionName || null);
+  const [selectedModel, setSelectedModel] = useState(cachedData.selectedModel || 'google/gemini-3-pro-preview');
   const [output, setOutput] = useState('');
   const [output2, setOutput2] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [generateTwo, setGenerateTwo] = useState(false);
-  const [useMarkdown, setUseMarkdown] = useState(true);
+  const [generateTwo, setGenerateTwo] = useState(cachedData.generateTwo ?? false);
+  const [useMarkdown, setUseMarkdown] = useState(cachedData.useMarkdown ?? true);
   
   // New features
-  const [outputLanguage, setOutputLanguage] = useState('zh');
-  const [customLanguage, setCustomLanguage] = useState('');
-  const [additionalNotes, setAdditionalNotes] = useState('');
+  const [outputLanguage, setOutputLanguage] = useState(cachedData.outputLanguage || 'zh');
+  const [customLanguage, setCustomLanguage] = useState(cachedData.customLanguage || '');
+  const [additionalNotes, setAdditionalNotes] = useState(cachedData.additionalNotes || '');
 
-  // Load default versions on mount
+  // Save to localStorage whenever relevant state changes
+  useEffect(() => {
+    const dataToCache: CachedData = {
+      multiInput: {
+        urls: multiInput.urls.map(u => ({ id: u.id, url: u.url, content: u.content })),
+        texts: multiInput.texts
+      },
+      inputMode,
+      clientBrand,
+      productUrls,
+      priceList,
+      priceListVersionName,
+      customPrompt,
+      promptVersionName,
+      selectedModel,
+      outputLanguage,
+      customLanguage,
+      additionalNotes,
+      generateTwo,
+      useMarkdown
+    };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(dataToCache));
+  }, [multiInput, inputMode, clientBrand, productUrls, priceList, priceListVersionName, customPrompt, promptVersionName, selectedModel, outputLanguage, customLanguage, additionalNotes, generateTwo, useMarkdown]);
+
+  // Load default versions on mount (only if no cached data)
   useEffect(() => {
     const loadDefaults = async () => {
-      // Load default price list
-      const { data: priceData } = await supabase
-        .from('price_lists')
-        .select('content, name')
-        .eq('is_default', true)
-        .maybeSingle();
+      // Only load defaults if we don't have cached values
+      if (!cachedData.priceList) {
+        const { data: priceData } = await supabase
+          .from('price_lists')
+          .select('content, name')
+          .eq('is_default', true)
+          .maybeSingle();
 
-      if (priceData) {
-        setPriceList(priceData.content);
-        setPriceListVersionName(priceData.name);
+        if (priceData) {
+          setPriceList(priceData.content);
+          setPriceListVersionName(priceData.name);
+        }
       }
 
-      // Load default prompt
-      const { data: promptData } = await supabase
-        .from('user_prompts')
-        .select('content, name')
-        .eq('is_default', true)
-        .maybeSingle();
+      if (!cachedData.customPrompt) {
+        const { data: promptData } = await supabase
+          .from('user_prompts')
+          .select('content, name')
+          .eq('is_default', true)
+          .maybeSingle();
 
-      if (promptData) {
-        setCustomPrompt(promptData.content);
-        setPromptVersionName(promptData.name);
+        if (promptData) {
+          setCustomPrompt(promptData.content);
+          setPromptVersionName(promptData.name);
+        }
       }
     };
     loadDefaults();
