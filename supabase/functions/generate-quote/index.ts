@@ -216,7 +216,23 @@ ${useMarkdown ? '4. 使用表格清晰展示信息' : '4. 使用清晰的层级�
         throw new Error(`Quote generation API error: ${errorText}`);
       }
 
-      const quoteData = await quoteResponse.json();
+      // Read response text first to handle empty/incomplete responses
+      const responseText = await quoteResponse.text();
+      console.log("Quote response length:", responseText.length);
+      
+      if (!responseText || responseText.trim() === "") {
+        console.error("Empty response from AI gateway");
+        throw new Error("AI 返回空响应，请重试");
+      }
+
+      let quoteData;
+      try {
+        quoteData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("Failed to parse quote response:", responseText.substring(0, 500));
+        throw new Error("AI 响应解析失败，请重试");
+      }
+      
       return quoteData.choices?.[0]?.message?.content || "";
     };
 
