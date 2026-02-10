@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, AlertCircle, Zap, MessageSquare, FileText, Settings2, Copy, FileCode, Globe } from 'lucide-react';
+import mammoth from 'mammoth';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -293,18 +294,34 @@ const ProposalGenerator = () => {
         if (doc.type === 'text/plain' || doc.type === 'text/markdown') {
           const textContent = await readTextFile(doc);
           allContent.push(`[文档: ${doc.name}]\n${textContent}`);
+        } else if (
+          doc.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+          doc.type === 'application/msword'
+        ) {
+          // Parse DOCX/DOC client-side using mammoth
+          try {
+            const arrayBuffer = await doc.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            if (result.value) {
+              allContent.push(`[文档: ${doc.name}]\n${result.value}`);
+            } else {
+              toast.error(`文档 ${doc.name} 内容提取为空`);
+            }
+          } catch (e) {
+            console.error('Error parsing docx:', e);
+            toast.error(`文档 ${doc.name} 解析失败`);
+          }
         } else {
-          // For PDF/DOC, we'll send as base64
+          // For PDF, send as base64 to AI for extraction
           const docBase64 = await fileToBase64(doc);
-          // Call API to extract text from document
-          const { data: docData, error: docError } = await supabase.functions.invoke('generate-quote', {
+          const { data: docData } = await supabase.functions.invoke('generate-quote', {
             body: {
               documentBase64: docBase64,
               documentType: doc.type,
               priceList,
               customPrompt: '请提取文档中的所有文本内容',
               model: selectedModel,
-              generateCount: 0, // Just extract, don't generate
+              generateCount: 0,
               clientBrand,
               productUrl: validProductUrls.join(' | '),
               useMarkdown: false
